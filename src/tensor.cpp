@@ -145,4 +145,31 @@ Tensor Tensor::operator+(const Tensor& other) const {
     return result;
 }
 
+Tensor& Tensor::operator-=(const Tensor& other) {
+    // The shapes must be identical
+    if (shape_ != other.shape_) {
+        throw std::invalid_argument("Tensor::operator+=: shape mismatch");
+    }
+
+    // Perform the subtraction
+    for (size_t i = 0; i < data_.size(); ++i) {
+        data_[i] -= other.data_[i];
+    }
+
+    return *this;
+}
+
+Tensor Tensor::operator-(const Tensor& other) const {
+    // Delegate the logic to the operator-= and re-use it here
+
+    // Copy the Tensor
+    Tensor result = *this;
+
+    // Add the other tensor using the operator-=
+    result -= other;
+
+    // Return the new created object
+    return result;
+}
+
 }  // namespace nrt

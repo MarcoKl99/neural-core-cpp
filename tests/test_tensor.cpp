@@ -161,3 +161,84 @@ TEST_CASE("Tensor 1D addition", "[tensor][addition]") {
         REQUIRE_THROWS_AS(t1 + t_other_rank, std::invalid_argument);
     }
 }
+
+// Addition
+TEST_CASE("Tensor 2D subtraction", "[tensor][addition]") {
+    nrt::Tensor t1({2, 2});
+    nrt::Tensor t2({2, 2});
+
+    // Set some values
+    t1(0, 0) = 1.0;
+    t1(0, 1) = 2.0;
+    t1(1, 0) = 3.0;
+    t1(1, 1) = 4.0;
+
+    t2(0, 0) = 5.0;
+    t2(0, 1) = 6.0;
+    t2(1, 0) = 7.0;
+    t2(1, 1) = 8.0;
+
+    SECTION("Correct sum element-wise - operator") {
+        nrt::Tensor t3 = t2 - t1;
+
+        REQUIRE(t3(0, 0) == 4.0);
+        REQUIRE(t3(0, 1) == 4.0);
+        REQUIRE(t3(1, 0) == 4.0);
+        REQUIRE(t3(1, 1) == 4.0);
+    }
+
+    SECTION("Correct sum element-wise -= operator") {
+        t2 -= t1;
+
+        REQUIRE(t2(0, 0) == 4.0);
+        REQUIRE(t2(0, 1) == 4.0);
+        REQUIRE(t2(1, 0) == 4.0);
+        REQUIRE(t2(1, 1) == 4.0);
+    }
+
+    SECTION("Tensors must be same shape") {
+        nrt::Tensor t_other_shape({2, 3});
+        REQUIRE_THROWS_AS(t1 - t_other_shape, std::invalid_argument);
+
+        nrt::Tensor t_other_rank({2});
+        REQUIRE_THROWS_AS(t1 - t_other_rank, std::invalid_argument);
+    }
+}
+
+TEST_CASE("Tensor 1D subtraction", "[tensor][addition]") {
+    nrt::Tensor t1({3});
+    nrt::Tensor t2({3});
+
+    // Set some values
+    t1(0) = 1.0;
+    t1(1) = 2.0;
+    t1(2) = 3.0;
+
+    t2(0) = 4.0;
+    t2(1) = 5.0;
+    t2(2) = 6.0;
+
+    SECTION("Correct sum element-wise - operator") {
+        nrt::Tensor t3 = t2 - t1;
+
+        REQUIRE(t3(0) == 3.0);
+        REQUIRE(t3(1) == 3.0);
+        REQUIRE(t3(2) == 3.0);
+    }
+
+    SECTION("Correct sum element-wise -= operator") {
+        t2 -= t1;
+
+        REQUIRE(t2(0) == 3.0);
+        REQUIRE(t2(1) == 3.0);
+        REQUIRE(t2(2) == 3.0);
+    }
+
+    SECTION("Tensors must be same shape") {
+        nrt::Tensor t_other_shape({4});
+        REQUIRE_THROWS_AS(t1 - t_other_shape, std::invalid_argument);
+
+        nrt::Tensor t_other_rank({3, 3});
+        REQUIRE_THROWS_AS(t1 - t_other_rank, std::invalid_argument);
+    }
+}

@@ -40,6 +40,10 @@ public:
     Tensor& operator+=(const Tensor& other);
     Tensor operator+(const Tensor& other) const;
 
+    // Subtraction
+    Tensor& operator-=(const Tensor& other);
+    Tensor operator-(const Tensor& other) const;
+
 private:
     std::vector<size_t> shape_;
     std::vector<double> data_;
