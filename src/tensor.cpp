@@ -172,4 +172,19 @@ Tensor Tensor::operator-(const Tensor& other) const {
     return result;
 }
 
+Tensor Tensor::hadamard(const Tensor& other) const {
+    // The shapes must be equal here
+    if (shape_ != other.shape_) {
+        throw std::invalid_argument("Tensor::hadamard: shape mismatch");
+    }
+
+    // Create a new Tensor instance - no in-place method required for now
+    Tensor result = *this;
+    for (size_t i = 0; i < data_.size(); ++i) {
+        result.data_[i] *= other.data_[i];
+    }
+
+    return result;
+}
+
 }  // namespace nrt
