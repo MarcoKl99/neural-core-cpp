@@ -24,9 +24,16 @@ Implemented operations:
 - Scalar multiplication (`operator*`, `operator*=`)
 
 Second building block:
+
 - `Linear` layer (affine transformation `y = W*x + b`)
 - Randomly initialized weights (normal distribution, mu=0, sigma=0.1)
 - `set_weights(...)` for deterministic testing / reference comparison
+- Tests
+
+Third building block:
+
+- Activation functions (free functions, `nrt/activations.hpp`): `relu`, `relu_derivative`,
+  `sigmoid`, `sigmoid_derivative`
 - Tests
 
 More to come! 🚀
