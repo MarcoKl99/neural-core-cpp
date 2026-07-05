@@ -16,18 +16,29 @@ public:
     size_t size() const;  // Total number of elements in the tensor
 
     // Note: In the following, 2 operator overloads are implemented
-    //       The compiler chooses the correct one depending on if the respective tensor is const or not
+    //       The compiler chooses the correct one depending on if the respective
+    //       tensor is const or not
 
     // Function call operator overload for 1D
-    double& operator()(size_t i);  // Works with a reference to be able to change the value
+    // Works with a reference to be able to change the value
+    double& operator()(size_t i);
     double operator()(size_t i) const;
 
     // Function call operator overload for 2D
-    double& operator()(size_t i, size_t j);  // Works with a reference to be able to change the value
+    // Works with a reference to be able to change the value
+    double& operator()(size_t i, size_t j);
     double operator()(size_t i, size_t j) const;
 
     // Utility function: print
     void print(std::size_t precision = 5) const;
+
+    /****************************/
+    /*  Mathematical operators  */
+    /****************************/
+
+    // Addition
+    Tensor& operator+=(const Tensor& other);
+    Tensor operator+(const Tensor& other) const;
 
 private:
     std::vector<size_t> shape_;
