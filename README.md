@@ -15,11 +15,18 @@ First building block:
 - Tests
 
 Implemented operations:
+
 - Elementwise addition (`operator+`, `operator+=`)
 - Elementwise subtraction (`operator-`, `operator-=`)
 - Hadamard product (`hadamard(...)`)
 - Matrix multiplication (`matmul(...)`, rank 2 only)
 - Transpose (`transpose()`, rank 2 only)
 - Scalar multiplication (`operator*`, `operator*=`)
+
+Second building block:
+- `Linear` layer (affine transformation `y = W*x + b`)
+- Randomly initialized weights (normal distribution, mu=0, sigma=0.1)
+- `set_weights(...)` for deterministic testing / reference comparison
+- Tests
 
 More to come! 🚀
