@@ -39,6 +39,12 @@ target_link_libraries(nrt_tests PRIVATE nrt::core Catch2::Catch2WithMain)
 include(Catch)
 catch_discover_tests(nrt_tests)
 
+# Examples
+add_executable(xor_forward
+    examples/xor_forward.cpp
+)
+target_link_libraries(xor_forward PRIVATE nrt::core)
+
 # Optional local scratch file (gitignore)
 if(EXISTS ${CMAKE_SOURCE_DIR}/dev.cpp)
     add_executable(dev dev.cpp)

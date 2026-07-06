@@ -42,4 +42,9 @@ Fourth building block:
 - MSE loss (`nrt/loss.hpp`, free function `mse(y_hat, y) -> double`)
 - Tests
 
+## Example 🧪
+
+`examples/xor_forward.cpp`: a small MLP (2 → Linear → 4 → ReLU → Linear → 1 → Sigmoid) run
+forward on all four XOR cases, with weights still randomly initialized (no training yet).
+
 More to come! 🚀
