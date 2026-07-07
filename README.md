@@ -44,7 +44,13 @@ Fourth building block:
 
 ## Example 🧪
 
-`examples/xor_forward.cpp`: a small MLP (2 → Linear → 4 → ReLU → Linear → 1 → Sigmoid) run
+`examples/xor_forward.cpp` — a small MLP (2 → Linear → 4 → ReLU → Linear → 1 → Sigmoid) run
 forward on all four XOR cases, with weights still randomly initialized (no training yet).
+
+Fifth building block:
+
+- `Linear::backward(...)`: gradients w.r.t. weights, bias and input (accumulating)
+- `zero_grad()`, `average_grad_weights()`, `average_grad_bias()`
+- Tests
 
 More to come! 🚀
