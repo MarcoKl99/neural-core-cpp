@@ -97,7 +97,25 @@ Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x) {
 }
 
 Tensor Sigmoid::forward(Tensor& x) {
-    return sigmoid(x);
+    // Forward: y = sigmoid(x)
+    Tensor result = sigmoid(x);
+
+    // Attach computation node for backward
+    result.creator_node_ =
+        ComputationNode{.backward_fn = [&x](Tensor& output, const Tensor& grad_output) {
+            // Chain rule: dL/dx = dL/dy * dy/dx
+            // where dy/dx = sigmoid_derivative(x)
+
+            Tensor grad_x = grad_output.hadamard(sigmoid_derivative(x));
+
+            // Accumulate gradient
+            x.accumulate_gradient(grad_x);
+
+            // Recurse on input
+            if (x.creator_node_) x.backward_impl(grad_x);
+        }};
+
+    return result;
 }
 
 std::vector<Parameter> Sigmoid::parameters() {

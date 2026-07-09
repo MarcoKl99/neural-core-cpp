@@ -282,3 +282,51 @@ TEST_CASE("ReLU Autodiff - Backward pass") {
 
     REQUIRE(tensors_approx_equal(x.gradient(), expected));
 }
+
+TEST_CASE("Sigmoid Autodiff - Forward pass") {
+    nrt::Tensor x({2, 2});
+    x(0, 0) = 0.0;
+    x(0, 1) = 1.0;
+    x(1, 0) = -1.0;
+    x(1, 1) = 2.0;
+
+    nrt::Sigmoid sigmoid;
+    nrt::Tensor y = sigmoid.forward(x);
+    nrt::Tensor expected({2, 2});
+    // sigmoid(0) ≈ 0.5
+    expected(0, 0) = 0.5;
+
+    // sigmoid(1) ≈ 0.731
+    expected(0, 1) = 0.731058578630;
+
+    // sigmoid(-1) ≈ 0.268
+    expected(1, 0) = 0.268941421369;
+
+    // sigmoid(2) ≈ 0.880
+    expected(1, 1) = 0.880797077973;
+
+    REQUIRE(tensors_approx_equal(y, expected));
+}
+
+TEST_CASE("Sigmoid Autodiff - Backward pass") {
+    nrt::Tensor x({2, 2});
+    x(0, 0) = 0.0;
+    x(0, 1) = 1.0;
+    x(1, 0) = -1.0;
+    x(1, 1) = 2.0;
+
+    nrt::Sigmoid sigmoid;
+    nrt::Tensor y = sigmoid.forward(x);
+    y.backward();
+
+    // grad_x = grad_y * sigmoid_derivative(x)
+    // grad_y = [[1,1],[1,1]]
+    // sigmoid_derivative(x) = sigmoid(x) * (1 - sigmoid(x))
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 0.25;
+    expected(0, 1) = 0.196611933241;
+    expected(1, 0) = 0.196611933241;
+    expected(1, 1) = 0.104993585403;
+
+    REQUIRE(tensors_approx_equal(x.gradient(), expected));
+}
