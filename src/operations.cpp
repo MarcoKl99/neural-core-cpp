@@ -51,4 +51,48 @@ Tensor scalar_mult_autodiff(Tensor& a, double scalar) {
     return result;
 }
 
+Tensor add_autodiff(Tensor& a, Tensor& b) {
+    // Forward: z = a + b
+    Tensor result = a + b;
+
+    // Attach computation node for backward
+    result.creator_node_ =
+        ComputationNode{.backward_fn = [&a, &b](Tensor& result_output, const Tensor& grad_result) {
+            // Chain rule: both inputs get the same gradient
+            // dL/da = dL/dz
+            // dL/db = dL/dz
+
+            a.accumulate_gradient(grad_result);
+            b.accumulate_gradient(grad_result);
+
+            // Recurse on inputs
+            if (a.creator_node_) a.backward_impl(grad_result);
+            if (b.creator_node_) b.backward_impl(grad_result);
+        }};
+
+    return result;
+}
+
+Tensor subtract_autodiff(Tensor& a, Tensor& b) {
+    // Forward: z = a - b
+    Tensor result = a - b;
+
+    // Attach computation node for backward
+    result.creator_node_ =
+        ComputationNode{.backward_fn = [&a, &b](Tensor& result_output, const Tensor& grad_result) {
+            // Chain rule:
+            // dL/da = dL/dz
+            // dL/db = -dL/dz (negated)
+
+            a.accumulate_gradient(grad_result);
+            b.accumulate_gradient(grad_result * -1.0);  // Negate for b
+
+            // Recurse on inputs
+            if (a.creator_node_) a.backward_impl(grad_result);
+            if (b.creator_node_) b.backward_impl(grad_result * -1.0);
+        }};
+
+    return result;
+}
+
 }  // namespace nrt

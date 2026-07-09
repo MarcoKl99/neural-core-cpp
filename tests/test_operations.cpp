@@ -147,3 +147,110 @@ TEST_CASE("Scalar Mult Autodiff - Backward pass") {
 
     REQUIRE(tensors_approx_equal(grad_a, expected));
 }
+
+TEST_CASE("Add Autodiff - Forward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 1.0;
+    a(0, 1) = 2.0;
+    a(1, 0) = 3.0;
+    a(1, 1) = 4.0;
+
+    nrt::Tensor b({2, 2});
+    b(0, 0) = 5.0;
+    b(0, 1) = 6.0;
+    b(1, 0) = 7.0;
+    b(1, 1) = 8.0;
+
+    nrt::Tensor c = nrt::add_autodiff(a, b);
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 6.0;
+    expected(0, 1) = 8.0;
+    expected(1, 0) = 10.0;
+    expected(1, 1) = 12.0;
+
+    REQUIRE(tensors_approx_equal(c, expected));
+}
+
+TEST_CASE("Add Autodiff - Backward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 1.0;
+    a(0, 1) = 2.0;
+    a(1, 0) = 3.0;
+    a(1, 1) = 4.0;
+
+    nrt::Tensor b({2, 2});
+    b(0, 0) = 5.0;
+    b(0, 1) = 6.0;
+    b(1, 0) = 7.0;
+    b(1, 1) = 8.0;
+
+    nrt::Tensor c = nrt::add_autodiff(a, b);
+    c.backward();
+
+    // Both gradients should be [[1,1],[1,1]] (same as grad_c)
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 1.0;
+    expected(0, 1) = 1.0;
+    expected(1, 0) = 1.0;
+    expected(1, 1) = 1.0;
+
+    REQUIRE(tensors_approx_equal(a.gradient(), expected));
+    REQUIRE(tensors_approx_equal(b.gradient(), expected));
+}
+
+TEST_CASE("Subtract Autodiff - Forward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 5.0;
+    a(0, 1) = 6.0;
+    a(1, 0) = 7.0;
+    a(1, 1) = 8.0;
+
+    nrt::Tensor b({2, 2});
+    b(0, 0) = 1.0;
+    b(0, 1) = 2.0;
+    b(1, 0) = 3.0;
+    b(1, 1) = 4.0;
+
+    nrt::Tensor c = nrt::subtract_autodiff(a, b);
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 4.0;
+    expected(0, 1) = 4.0;
+    expected(1, 0) = 4.0;
+    expected(1, 1) = 4.0;
+
+    REQUIRE(tensors_approx_equal(c, expected));
+}
+
+TEST_CASE("Subtract Autodiff - Backward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 5.0;
+    a(0, 1) = 6.0;
+    a(1, 0) = 7.0;
+    a(1, 1) = 8.0;
+
+    nrt::Tensor b({2, 2});
+    b(0, 0) = 1.0;
+    b(0, 1) = 2.0;
+    b(1, 0) = 3.0;
+    b(1, 1) = 4.0;
+
+    nrt::Tensor c = nrt::subtract_autodiff(a, b);
+    c.backward();
+
+    // grad_a should be [[1,1],[1,1]]
+    nrt::Tensor expected_a({2, 2});
+    expected_a(0, 0) = 1.0;
+    expected_a(0, 1) = 1.0;
+    expected_a(1, 0) = 1.0;
+    expected_a(1, 1) = 1.0;
+
+    // grad_b should be [[-1,-1],[-1,-1]] (negated)
+    nrt::Tensor expected_b({2, 2});
+    expected_b(0, 0) = -1.0;
+    expected_b(0, 1) = -1.0;
+    expected_b(1, 0) = -1.0;
+    expected_b(1, 1) = -1.0;
+
+    REQUIRE(tensors_approx_equal(a.gradient(), expected_a));
+    REQUIRE(tensors_approx_equal(b.gradient(), expected_b));
+}
