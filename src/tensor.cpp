@@ -257,4 +257,45 @@ double Tensor::sum() const {
     return total;
 }
 
+// Autograd methods
+Tensor Tensor::gradient() {
+    Tensor g(gradient_shape_);
+    g.data_ = gradient_data_;
+    return g;
+}
+
+void Tensor::backward() {
+    if (!creator_node_) return;  // Leaf tensor, nothing to backward
+
+    // Initialize gradient: for a scalar loss, gradient is 1.0
+    gradient_data_ = std::vector<double>(data_.size(), 1.0);
+    gradient_shape_ = shape_;
+
+    // Start the backward traversal
+    backward_impl(gradient());
+}
+
+void Tensor::backward_impl(const Tensor& grad_output) {
+    if (!creator_node_) return;  // Leaf tensor, stop recursion
+
+    // Call the backward function for this operation
+    // This will compute gradients for input tensors and recurse on them
+    creator_node_->backward_fn(*this, grad_output);
+}
+
+void Tensor::accumulate_gradient(const Tensor& grad) {
+    if (gradient_data_.empty()) {
+        gradient_data_ = grad.data_;
+        gradient_shape_ = grad.shape_;
+    } else {
+        for (size_t i = 0; i < gradient_data_.size(); ++i) {
+            gradient_data_[i] += grad.data_[i];
+        }
+    }
+}
+
+bool Tensor::is_leaf() {
+    return !creator_node_.has_value();
+}
+
 }  // namespace nrt

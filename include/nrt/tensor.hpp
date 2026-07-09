@@ -2,7 +2,10 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <vector>
+
+#include "nrt/computation_node.hpp"
 
 namespace nrt {
 
@@ -60,9 +63,37 @@ public:
     // Helper function
     double sum() const;
 
+    /**************/
+    /*  Autograd  */
+    /**************/
+
+    void backward();
+
+    Tensor gradient();
+
+    bool is_leaf();
+
+    void accumulate_gradient(const Tensor& grad);
+
+    // Helper method for backward traversal
+    void backward_impl(const Tensor& grad_ouput);
+
+    // Computation node if not leaf - Public for now, maybe to refactor later
+    std::optional<ComputationNode> creator_node_;
+
 private:
     std::vector<size_t> shape_;
     std::vector<double> data_;
+
+    // Autograd members
+    std::vector<double> gradient_data_;   // Stores computed gradients
+    std::vector<size_t> gradient_shape_;  // Shape of the gradient vector
+
+    // Those classes can call private methods and attributes
+    // Here: Layers must attach backward functions to Tensors
+    friend class Linear;
+    friend class ReLU;
+    friend class Sigmoid;
 };
 
 }  // namespace nrt
