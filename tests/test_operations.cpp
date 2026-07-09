@@ -258,3 +258,180 @@ TEST_CASE("Subtract Autodiff - Backward pass") {
     REQUIRE(tensors_approx_equal(a.gradient(), expected_a));
     REQUIRE(tensors_approx_equal(b.gradient(), expected_b));
 }
+
+// ==================================================
+// Comprehensive tests: chaining multiple operations
+// ==================================================
+
+TEST_CASE("Chain: MatMul -> Add -> Backward") {
+    // Test gradient flow through: (w @ x) + b
+    nrt::Tensor w({2, 2});
+    w(0, 0) = 1.0;
+    w(0, 1) = 2.0;
+    w(1, 0) = 3.0;
+    w(1, 1) = 4.0;
+
+    nrt::Tensor x({2, 1});
+    x(0, 0) = 1.0;
+    x(1, 0) = 2.0;
+
+    nrt::Tensor b({2, 1});
+    b(0, 0) = 0.5;
+    b(1, 0) = 1.0;
+
+    // Forward: z = w @ x, y = z + b
+    nrt::Tensor z = nrt::matmul_autodiff(w, x);
+    nrt::Tensor y = nrt::add_autodiff(z, b);
+
+    // Expected forward:
+    // z = [[1*1 + 2*2], [3*1 + 4*2]] = [[5], [11]]
+    // y = [[5.5], [12]]
+    nrt::Tensor expected_y({2, 1});
+    expected_y(0, 0) = 5.5;
+    expected_y(1, 0) = 12.0;
+    REQUIRE(tensors_approx_equal(y, expected_y));
+
+    // Backward: initialize gradient of y as [[1], [1]]
+    y.backward();
+
+    // Expected gradients:
+    // grad_y = [[1], [1]]
+    // grad_z = grad_y = [[1], [1]] (passed through add)
+    // grad_b = grad_y = [[1], [1]] (passed through add)
+    // grad_w = grad_z @ x.T = [[1], [1]] @ [[1, 2]] = [[1, 2], [1, 2]]
+    // grad_x = w.T @ grad_z = [[1, 3], [2, 4]] @ [[1], [1]] = [[4], [6]]
+
+    nrt::Tensor expected_grad_w({2, 2});
+    expected_grad_w(0, 0) = 1.0;
+    expected_grad_w(0, 1) = 2.0;
+    expected_grad_w(1, 0) = 1.0;
+    expected_grad_w(1, 1) = 2.0;
+
+    nrt::Tensor expected_grad_x({2, 1});
+    expected_grad_x(0, 0) = 4.0;
+    expected_grad_x(1, 0) = 6.0;
+
+    nrt::Tensor expected_grad_b({2, 1});
+    expected_grad_b(0, 0) = 1.0;
+    expected_grad_b(1, 0) = 1.0;
+
+    REQUIRE(tensors_approx_equal(w.gradient(), expected_grad_w));
+    REQUIRE(tensors_approx_equal(x.gradient(), expected_grad_x));
+    REQUIRE(tensors_approx_equal(b.gradient(), expected_grad_b));
+}
+
+TEST_CASE("Chain: MatMul -> Scalar Mult -> Backward") {
+    // Test gradient flow through: (w @ x) * 2
+    nrt::Tensor w({2, 2});
+    w(0, 0) = 1.0;
+    w(0, 1) = 2.0;
+    w(1, 0) = 3.0;
+    w(1, 1) = 4.0;
+
+    nrt::Tensor x({2, 1});
+    x(0, 0) = 1.0;
+    x(1, 0) = 2.0;
+
+    // Forward: z = w @ x, y = z * 2
+    nrt::Tensor z = nrt::matmul_autodiff(w, x);
+    nrt::Tensor y = nrt::scalar_mult_autodiff(z, 2.0);
+
+    // Expected forward:
+    // z = [[5], [11]]
+    // y = [[10], [22]]
+    nrt::Tensor expected_y({2, 1});
+    expected_y(0, 0) = 10.0;
+    expected_y(1, 0) = 22.0;
+    REQUIRE(tensors_approx_equal(y, expected_y));
+
+    // Backward:
+    y.backward();
+
+    // grad_y = [[1], [1]]
+    // grad_z = grad_y * 2 = [[2], [2]]
+    // grad_w = grad_z @ x.T = [[2], [2]] @ [[1, 2]] = [[2, 4], [2, 4]]
+    // grad_x = w.T @ grad_z = [[1, 3], [2, 4]] @ [[2], [2]] = [[8], [12]]
+
+    nrt::Tensor expected_grad_w({2, 2});
+    expected_grad_w(0, 0) = 2.0;
+    expected_grad_w(0, 1) = 4.0;
+    expected_grad_w(1, 0) = 2.0;
+    expected_grad_w(1, 1) = 4.0;
+
+    nrt::Tensor expected_grad_x({2, 1});
+    expected_grad_x(0, 0) = 8.0;
+    expected_grad_x(1, 0) = 12.0;
+
+    REQUIRE(tensors_approx_equal(w.gradient(), expected_grad_w));
+    REQUIRE(tensors_approx_equal(x.gradient(), expected_grad_x));
+}
+
+TEST_CASE("Chain: MatMul -> Add -> Subtract -> Backward") {
+    // Test 3-operation chain: ((w @ x) + b) - penalty
+    // This tests deeper recursion through the computation graph
+    nrt::Tensor w({2, 2});
+    w(0, 0) = 1.0;
+    w(0, 1) = 2.0;
+    w(1, 0) = 3.0;
+    w(1, 1) = 4.0;
+
+    nrt::Tensor x({2, 1});
+    x(0, 0) = 1.0;
+    x(1, 0) = 2.0;
+
+    nrt::Tensor b({2, 1});
+    b(0, 0) = 0.5;
+    b(1, 0) = 1.0;
+
+    nrt::Tensor penalty({2, 1});
+    penalty(0, 0) = 0.1;
+    penalty(1, 0) = 0.2;
+
+    // Forward: z = w @ x, y = z + b, loss = y - penalty
+    nrt::Tensor z = nrt::matmul_autodiff(w, x);
+    nrt::Tensor y = nrt::add_autodiff(z, b);
+    nrt::Tensor loss = nrt::subtract_autodiff(y, penalty);
+
+    // Expected forward:
+    // z = [[5], [11]]
+    // y = [[5.5], [12]]
+    // loss = [[5.4], [11.8]]
+    nrt::Tensor expected_loss({2, 1});
+    expected_loss(0, 0) = 5.4;
+    expected_loss(1, 0) = 11.8;
+    REQUIRE(tensors_approx_equal(loss, expected_loss));
+
+    // Backward:
+    loss.backward();
+
+    // grad_loss = [[1], [1]]
+    // grad_y = grad_loss = [[1], [1]] (from subtract)
+    // grad_penalty = -grad_loss = [[-1], [-1]]
+    // grad_z = grad_y = [[1], [1]] (from add)
+    // grad_b = grad_y = [[1], [1]] (from add)
+    // grad_w = grad_z @ x.T = [[1], [1]] @ [[1, 2]] = [[1, 2], [1, 2]]
+    // grad_x = w.T @ grad_z = [[1, 3], [2, 4]] @ [[1], [1]] = [[4], [6]]
+
+    nrt::Tensor expected_grad_w({2, 2});
+    expected_grad_w(0, 0) = 1.0;
+    expected_grad_w(0, 1) = 2.0;
+    expected_grad_w(1, 0) = 1.0;
+    expected_grad_w(1, 1) = 2.0;
+
+    nrt::Tensor expected_grad_x({2, 1});
+    expected_grad_x(0, 0) = 4.0;
+    expected_grad_x(1, 0) = 6.0;
+
+    nrt::Tensor expected_grad_b({2, 1});
+    expected_grad_b(0, 0) = 1.0;
+    expected_grad_b(1, 0) = 1.0;
+
+    nrt::Tensor expected_grad_penalty({2, 1});
+    expected_grad_penalty(0, 0) = -1.0;
+    expected_grad_penalty(1, 0) = -1.0;
+
+    REQUIRE(tensors_approx_equal(w.gradient(), expected_grad_w));
+    REQUIRE(tensors_approx_equal(x.gradient(), expected_grad_x));
+    REQUIRE(tensors_approx_equal(b.gradient(), expected_grad_b));
+    REQUIRE(tensors_approx_equal(penalty.gradient(), expected_grad_penalty));
+}
