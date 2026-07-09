@@ -1,5 +1,6 @@
 #include "nrt/optimizer.hpp"
 
+#include "nrt/parameter.hpp"
 #include "nrt/tensor.hpp"
 
 namespace nrt {

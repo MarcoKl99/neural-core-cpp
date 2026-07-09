@@ -4,6 +4,10 @@
 #include "nrt/activations.hpp"
 #include "nrt/linear.hpp"
 #include "nrt/loss.hpp"
+#include "nrt/module.hpp"
+#include "nrt/optimizer.hpp"
+#include "nrt/parameter.hpp"
+#include "nrt/sequential.hpp"
 #include "nrt/tensor.hpp"
 
 /*
@@ -133,15 +137,13 @@ double forward_backward_step(nrt::Linear& layer1, nrt::Linear& layer2, const nrt
     return loss;
 }
 
-double evaluate_average_loss(nrt::Linear& layer1, nrt::Linear& layer2,
-                             const std::vector<nrt::Tensor>& inputs,
+double evaluate_average_loss(nrt::Sequential& model, const std::vector<nrt::Tensor>& inputs,
                              const std::vector<nrt::Tensor>& targets) {
     double total_loss = 0.0;
 
     for (size_t i = 0; i < inputs.size(); ++i) {
-        // Forward pass
-        nrt::Tensor a1 = nrt::relu(layer1.forward(inputs[i]));
-        nrt::Tensor y_hat = nrt::sigmoid(layer2.forward(a1));
+        // Forward pass using the model
+        nrt::Tensor y_hat = model.forward(inputs[i]);
 
         // Loss calculation
         total_loss += nrt::mse(y_hat, targets[i]);
@@ -153,15 +155,24 @@ double evaluate_average_loss(nrt::Linear& layer1, nrt::Linear& layer2,
 }  // namespace
 
 int main() {
-    // Define the neural network: 2 -> Linear -> 4 -> ReLU -> Linear -> 1 -> Sigmoid
-    nrt::Linear layer1(2, 4);
-    nrt::Linear layer2(4, 1);
+    // Create the neural network using Sequential: 2 -> 4 (ReLU) -> 1 (Sigmoid)
+    std::vector<std::unique_ptr<nrt::Module>> modules;
+    modules.push_back(std::make_unique<nrt::Linear>(2, 4));
+    modules.push_back(std::make_unique<nrt::ReLU>());
+    modules.push_back(std::make_unique<nrt::Linear>(4, 1));
+    modules.push_back(std::make_unique<nrt::Sigmoid>());
 
-    // Set weights to match the PyTorch reference implementation
-    set_reference_weights(layer1, layer2);
+    nrt::Sequential model(std::move(modules));
 
-    // Print the weights to fix them for the comparison to PyTorch
-    // print_weights(layer1, layer2);
+    // Set reference weights (access layers via index)
+    auto layer1 = dynamic_cast<nrt::Linear*>(model.get(0));
+    auto layer2 = dynamic_cast<nrt::Linear*>(model.get(2));
+    set_reference_weights(*layer1, *layer2);
+
+    // Get all parameters and create optimizer
+    auto params = model.parameters();
+    const double learning_rate = 0.1;
+    nrt::SGD optimizer(params, learning_rate);
 
     // Define all 4 possible training samples
     // (0, 0) = 0, (0, 1) = 1, (1, 0) = 1, (1, 1) = 0
@@ -171,17 +182,10 @@ int main() {
                                         make_target(0.0)};
 
     // Define the training parameters
-    const double learning_rate = 0.1;
     const int epochs = 5000;
 
-    // Collect all parameters and create optimizer
-    auto params = layer1.parameters();
-    auto l2_params = layer2.parameters();
-    params.insert(params.end(), l2_params.begin(), l2_params.end());
-    nrt::SGD optimizer(params, learning_rate);
-
     // Calculate the loss before training
-    double loss_before = evaluate_average_loss(layer1, layer2, inputs, targets);
+    double loss_before = evaluate_average_loss(model, inputs, targets);
     std::cout << "Average loss BEFORE update: " << loss_before << '\n';
 
     for (int i = 0; i < epochs; ++i) {
@@ -190,7 +194,7 @@ int main() {
 
         // Accumulate gradients across all samples
         for (size_t j = 0; j < inputs.size(); ++j) {
-            forward_backward_step(layer1, layer2, inputs[j], targets[j]);
+            forward_backward_step(*layer1, *layer2, inputs[j], targets[j]);
         }
 
         // Average gradients and apply optimizer step - Averaging step to be refactored later
@@ -199,13 +203,13 @@ int main() {
 
         // Check if the loss has improved
         if ((i % 1000) == 0) {
-            double loss_after = evaluate_average_loss(layer1, layer2, inputs, targets);
+            double loss_after = evaluate_average_loss(model, inputs, targets);
             std::cout << "Loss (" << i << "/" << epochs << "):  " << loss_after << '\n';
         }
     }
 
     // Final loss output
-    double loss_after = evaluate_average_loss(layer1, layer2, inputs, targets);
+    double loss_after = evaluate_average_loss(model, inputs, targets);
     std::cout << "Loss (" << epochs << "/" << epochs << "):  " << loss_after << '\n';
 
     return 0;

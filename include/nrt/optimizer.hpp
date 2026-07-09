@@ -2,15 +2,10 @@
 
 #include <vector>
 
+#include "nrt/parameter.hpp"
 #include "nrt/tensor.hpp"
 
 namespace nrt {
-
-// A learnable parameter: holds pointers to the value and its accumulated gradient
-struct Parameter {
-    Tensor* value;
-    Tensor* gradient;  // Accumulated gradient
-};
 
 // Stochastic Gradient Descent optimizer
 class SGD {

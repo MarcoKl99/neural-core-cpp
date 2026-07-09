@@ -3,6 +3,8 @@
 #include <cmath>
 #include <functional>
 
+#include "nrt/parameter.hpp"
+
 namespace nrt {
 
 namespace {
@@ -58,6 +60,23 @@ Tensor relu_backward(const Tensor& grad_output, const Tensor& x) {
 Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x) {
     // Chain rule elementwise -> Hadamard product
     return grad_output.hadamard(sigmoid_derivative(x));
+}
+
+// Implement the class methods for ReLU and Sigmoid
+Tensor ReLU::forward(const Tensor& x) {
+    return relu(x);
+}
+
+std::vector<Parameter> ReLU::parameters() {
+    return {};  // No learnable parameters
+}
+
+Tensor Sigmoid::forward(const Tensor& x) {
+    return sigmoid(x);
+}
+
+std::vector<Parameter> Sigmoid::parameters() {
+    return {};  // No learnable parameters
 }
 
 }  // namespace nrt

@@ -11,6 +11,7 @@ add_library(nrt_core
     src/activations.cpp
     src/loss.cpp
     src/optimizer.cpp
+    src/sequential.cpp
 )
 
 # Add the include directory to use #include "nrt/..."

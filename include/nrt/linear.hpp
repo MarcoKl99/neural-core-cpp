@@ -2,12 +2,13 @@
 
 #include <optional>
 
-#include "nrt/optimizer.hpp"
+#include "nrt/module.hpp"
+#include "nrt/parameter.hpp"
 #include "nrt/tensor.hpp"
 
 namespace nrt {
 
-class Linear {
+class Linear : public nrt::Module {
 public:
     /*
     Computes an affine transformation y = Wx + b with weights W.shape = {out_features, in_features}
@@ -16,19 +17,21 @@ public:
     */
 
     Linear(size_t in_features, size_t out_features);
+    virtual ~Linear() noexcept = default;
+
+    // Implement the Module-methods
+    Tensor forward(const Tensor& x) override;
+    std::vector<Parameter> parameters() override;
 
     // Overwrite randomly init weights for testing
     void set_weights(const Tensor& w, const Tensor& b);
 
-    // x of shape {in_features, 1} - returns shape {out_features, 1}.
-    Tensor forward(const Tensor& x);
     Tensor backward(const Tensor& grad_output);
     void zero_grad();
 
     // Note: Not const Tensor as a return type to enable std::move behavior by default
     Tensor average_grad_weights() const;
     Tensor average_grad_bias() const;
-
     size_t in_features() const;
     size_t out_features() const;
 
@@ -36,9 +39,6 @@ public:
     // (Tensor instances can be large)
     const Tensor& weights() const;
     const Tensor& bias() const;
-
-    // Get all parameters in the reference struct
-    std::vector<Parameter> parameters();
 
 private:
     size_t in_features_;
