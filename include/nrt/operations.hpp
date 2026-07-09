@@ -8,6 +8,6 @@ namespace nrt {
 Tensor matmul_autodiff(Tensor& a, Tensor& b);
 Tensor add_autodiff(Tensor& a, Tensor& b);
 Tensor subtract_autodiff(Tensor& a, Tensor& b);
-Tensor scalar_mult_autodiff(Tensor& a, Tensor& b);
+Tensor scalar_mult_autodiff(Tensor& a, double scalar);
 
 }  // namespace nrt

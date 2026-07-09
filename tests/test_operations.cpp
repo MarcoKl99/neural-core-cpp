@@ -107,3 +107,43 @@ TEST_CASE("MatMul Autodiff - Leaf tensor identification") {
     REQUIRE(b.is_leaf() == true);
     REQUIRE(c.is_leaf() == false);
 }
+
+TEST_CASE("Scalar Mult Autodiff - Forward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 1.0;
+    a(0, 1) = 2.0;
+    a(1, 0) = 3.0;
+    a(1, 1) = 4.0;
+
+    double scalar = 2.0;
+    nrt::Tensor b = nrt::scalar_mult_autodiff(a, scalar);
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 2.0;
+    expected(0, 1) = 4.0;
+    expected(1, 0) = 6.0;
+    expected(1, 1) = 8.0;
+
+    REQUIRE(tensors_approx_equal(b, expected));
+}
+
+TEST_CASE("Scalar Mult Autodiff - Backward pass") {
+    nrt::Tensor a({2, 2});
+    a(0, 0) = 1.0;
+    a(0, 1) = 2.0;
+    a(1, 0) = 3.0;
+    a(1, 1) = 4.0;
+
+    double scalar = 2.0;
+    nrt::Tensor b = nrt::scalar_mult_autodiff(a, scalar);
+    b.backward();
+
+    // grad_a = grad_b * scalar = [[1,1],[1,1]] * 2.0 = [[2,2],[2,2]]
+    auto grad_a = a.gradient();
+    nrt::Tensor expected({2, 2});
+    expected(0, 0) = 2.0;
+    expected(0, 1) = 2.0;
+    expected(1, 0) = 2.0;
+    expected(1, 1) = 2.0;
+
+    REQUIRE(tensors_approx_equal(grad_a, expected));
+}

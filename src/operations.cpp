@@ -31,4 +31,24 @@ Tensor matmul_autodiff(Tensor& a, Tensor& b) {
     return result;
 }
 
+Tensor scalar_mult_autodiff(Tensor& a, double scalar) {
+    // Forward: z = a * scalar
+    Tensor result = a * scalar;
+
+    // Attach the computational node
+    result.creator_node_ = ComputationNode{
+        .backward_fn = [&a, scalar](Tensor& result_output, const Tensor& grad_result) {
+            // Chain rule: dL/da = dL/dz * scalar
+            Tensor grad_a = grad_result * scalar;
+
+            // Accumulate the gradients
+            a.accumulate_gradient(grad_a);
+
+            // Recursion
+            if (a.creator_node_) a.backward_impl(grad_a);
+        }};
+
+    return result;
+}
+
 }  // namespace nrt
