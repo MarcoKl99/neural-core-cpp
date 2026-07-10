@@ -10,15 +10,15 @@ nrt::SGD::SGD(const std::vector<Parameter>& params, double learning_rate)
 
 void nrt::SGD::zero_grad() {
     // Set fresh gradients for the tensors
-    for (auto param : params_) {
-        *param.gradient = Tensor(param.gradient->shape());
+    for (auto& param : params_) {
+        param.value->zero_grad();
     }
 }
 
 void nrt::SGD::step() {
     // Update each parameter according to its gradient and the learning rate
-    for (auto param : params_) {
-        *param.value = *param.value - *param.gradient * learning_rate_;
+    for (auto& param : params_) {
+        *param.value = *param.value - param.value->gradient() * learning_rate_;
     }
 }
 

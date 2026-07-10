@@ -90,31 +90,31 @@ TEST_CASE("Linear forward", "[linear][forward]") {
     layer.set_weights(w, b);
 
     // x = [1, 1, 1]^T
-    nrt::Tensor x({3, 1});
-    x(0, 0) = 1.0;
-    x(1, 0) = 1.0;
-    x(2, 0) = 1.0;
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
+    (*x)(0, 0) = 1.0;
+    (*x)(1, 0) = 1.0;
+    (*x)(2, 0) = 1.0;
 
     SECTION("Output has correct shape") {
-        nrt::Tensor y = layer.forward(x);
-        REQUIRE(y.shape() == std::vector<size_t>{2, 1});
+        auto y = layer.forward(x);
+        REQUIRE(y->shape() == std::vector<size_t>{2, 1});
     }
 
     SECTION("Output is correctly computed (W*x + b)") {
         // y[0] = 1*1 + 2*1 + 3*1 + 1 = 7
         // y[1] = 4*1 + 5*1 + 6*1 + 1 = 16
-        nrt::Tensor y = layer.forward(x);
-        REQUIRE(y(0, 0) == 7.0);
-        REQUIRE(y(1, 0) == 16.0);
+        auto y = layer.forward(x);
+        REQUIRE((*y)(0, 0) == 7.0);
+        REQUIRE((*y)(1, 0) == 16.0);
     }
 
     SECTION("Wrong input shape throws") {
-        nrt::Tensor wrong_x({4, 1});
+        auto wrong_x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 1});
         REQUIRE_THROWS_AS(layer.forward(wrong_x), std::invalid_argument);
     }
 
     SECTION("1D input throws (must be {in_features, 1})") {
-        nrt::Tensor wrong_x({3});
+        auto wrong_x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3});
         REQUIRE_THROWS_AS(layer.forward(wrong_x), std::invalid_argument);
     }
 }
@@ -136,19 +136,18 @@ TEST_CASE("Linear forward creates computation nodes") {
     layer.set_weights(w, b);
 
     // Input
-    nrt::Tensor x({2, 1});
-    x(0, 0) = 1.0;
-    x(1, 0) = 2.0;
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    (*x)(0, 0) = 1.0;
+    (*x)(1, 0) = 2.0;
 
     // Forward pass
-    nrt::Tensor output = layer.forward(x);
+    auto output = layer.forward(x);
 
     // Verify: output should NOT be a leaf
     // (because forward uses matmul_autodiff and add_autodiff which attach computation nodes)
-    REQUIRE(output.is_leaf() == false);
+    REQUIRE(!(output->is_leaf()));
 }
 
-// SEGFAULT here -> fix that!
 TEST_CASE("Linear forward backward propagates gradients") {
     nrt::Linear layer(2, 2);
 
@@ -166,22 +165,22 @@ TEST_CASE("Linear forward backward propagates gradients") {
     layer.set_weights(w, b);
 
     // Input
-    nrt::Tensor x({2, 1});
-    x(0, 0) = 1.0;
-    x(1, 0) = 2.0;
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    (*x)(0, 0) = 1.0;
+    (*x)(1, 0) = 2.0;
 
     // Forward pass
-    nrt::Tensor output = layer.forward(x);
+    auto output = layer.forward(x);
 
     // Backward pass
-    output.backward();
+    output->backward();
 
     // Verify: gradients should be accumulated in weights and bias
     // Using the public gradient() method
     nrt::Tensor grad_w = layer.weights().gradient();
-    // nrt::Tensor grad_b = layer.bias().gradient();
+    nrt::Tensor grad_b = layer.bias().gradient();
 
     // Verify: gradients are not all zeros (some gradient should exist)
     REQUIRE(grad_w.size() > 0);
-    // REQUIRE(grad_b.size() > 0);
+    REQUIRE(grad_b.size() > 0);
 }

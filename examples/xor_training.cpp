@@ -22,13 +22,6 @@ Note: depending on random weight initialization, this can occasionally get stuck
 
 namespace {
 
-// Average accumulated gradients by batch size
-void average_gradients(std::vector<nrt::Parameter>& params, size_t batch_size) {
-    for (auto& param : params) {
-        *param.gradient = *param.gradient * (1.0 / batch_size);
-    }
-}
-
 // Print the initial weights for the comparison to PyTorch
 void print_weights(nrt::Linear& layer1, nrt::Linear& layer2) {
     // Print initial weights for reference validation
@@ -102,51 +95,26 @@ void set_reference_weights(nrt::Linear& layer1, nrt::Linear& layer2) {
     layer2.set_weights(w2, b2);
 }
 
-nrt::Tensor make_input(double a, double b) {
-    nrt::Tensor x({2, 1});
-    x(0, 0) = a;
-    x(1, 0) = b;
+std::shared_ptr<nrt::Tensor> make_input(double a, double b) {
+    auto x = std::make_shared<nrt::Tensor>(std::vector<size_t>{2, 1});
+    (*x)(0, 0) = a;
+    (*x)(1, 0) = b;
     return x;
 }
-
-nrt::Tensor make_target(double t) {
-    nrt::Tensor y({1, 1});
-    y(0, 0) = t;
+std::shared_ptr<nrt::Tensor> make_target(double t) {
+    auto y = std::make_shared<nrt::Tensor>(std::vector<size_t>{1, 1});
+    (*y)(0, 0) = t;
     return y;
 }
 
-// Execute the full forward-backward iteration for one single step
-// and returns the loss for this sample
-double forward_backward_step(nrt::Linear& layer1, nrt::Linear& layer2, nrt::Tensor& x,
-                             const nrt::Tensor& target) {
-    // Forward
-    nrt::Tensor z1 = layer1.forward(x);
-    nrt::Tensor a1 = nrt::relu(z1);
-    nrt::Tensor z2 = layer2.forward(a1);
-    nrt::Tensor y_hat = nrt::sigmoid(z2);
-
-    double loss = nrt::mse(y_hat, target);
-
-    // Backward
-    nrt::Tensor grad_y_hat = nrt::mse_derivative(y_hat, target);
-    nrt::Tensor grad_z2 = nrt::sigmoid_backward(grad_y_hat, z2);
-    nrt::Tensor grad_a1 = layer2.backward(grad_z2);
-    nrt::Tensor grad_z1 = nrt::relu_backward(grad_a1, z1);
-    layer1.backward(grad_z1);
-
-    return loss;
-}
-
-double evaluate_average_loss(nrt::Sequential& model, std::vector<nrt::Tensor>& inputs,
-                             const std::vector<nrt::Tensor>& targets) {
+double evaluate_average_loss(nrt::Sequential& model,
+                             std::vector<std::shared_ptr<nrt::Tensor>>& inputs,
+                             const std::vector<std::shared_ptr<nrt::Tensor>>& targets) {
     double total_loss = 0.0;
 
     for (size_t i = 0; i < inputs.size(); ++i) {
-        // Forward pass using the model
-        nrt::Tensor y_hat = model.forward(inputs[i]);
-
-        // Loss calculation
-        total_loss += nrt::mse(y_hat, targets[i]);
+        auto y_hat = model.forward(inputs[i]);  // shared_ptr
+        total_loss += nrt::mse(*y_hat, *targets[i]);
     }
 
     return total_loss / static_cast<double>(inputs.size());
@@ -169,42 +137,37 @@ int main() {
     auto layer2 = dynamic_cast<nrt::Linear*>(model.get(2));
     set_reference_weights(*layer1, *layer2);
 
-    // Get all parameters and create optimizer
-    auto params = model.parameters();
-    const double learning_rate = 0.1;
-    nrt::SGD optimizer(params, learning_rate);
-
     // Define all 4 possible training samples
     // (0, 0) = 0, (0, 1) = 1, (1, 0) = 1, (1, 1) = 0
-    std::vector<nrt::Tensor> inputs = {make_input(0.0, 0.0), make_input(0.0, 1.0),
-                                       make_input(1.0, 0.0), make_input(1.0, 1.0)};
-    std::vector<nrt::Tensor> targets = {make_target(0.0), make_target(1.0), make_target(1.0),
-                                        make_target(0.0)};
+    std::vector<std::shared_ptr<nrt::Tensor>> inputs = {make_input(0.0, 0.0), make_input(0.0, 1.0),
+                                                        make_input(1.0, 0.0), make_input(1.0, 1.0)};
+    std::vector<std::shared_ptr<nrt::Tensor>> targets = {make_target(0.0), make_target(1.0),
+                                                         make_target(1.0), make_target(0.0)};
 
     // Define the training parameters
     const int epochs = 5000;
+    const double learning_rate = 0.1;
+    const size_t batch_size = inputs.size();
+    nrt::MSELoss loss_fn;
+    nrt::SGD optimizer(model.parameters(), learning_rate / batch_size);
 
-    // Calculate the loss before training
     double loss_before = evaluate_average_loss(model, inputs, targets);
     std::cout << "Average loss BEFORE update: " << loss_before << '\n';
 
-    for (int i = 0; i < epochs; ++i) {
-        // One complete full-batch gradient descent
+    for (int epoch = 0; epoch < epochs; ++epoch) {
         optimizer.zero_grad();
 
-        // Accumulate gradients across all samples
         for (size_t j = 0; j < inputs.size(); ++j) {
-            forward_backward_step(*layer1, *layer2, inputs[j], targets[j]);
+            auto y_hat = model.forward(inputs[j]);  // builds the graph
+            auto loss = loss_fn.forward(y_hat, targets[j]);
+            loss->backward();  // accumulates into every param
         }
 
-        // Average gradients and apply optimizer step - Averaging step to be refactored later
-        average_gradients(params, inputs.size());
         optimizer.step();
 
-        // Check if the loss has improved
-        if ((i % 1000) == 0) {
-            double loss_after = evaluate_average_loss(model, inputs, targets);
-            std::cout << "Loss (" << i << "/" << epochs << "):  " << loss_after << '\n';
+        if ((epoch % 1000) == 0) {
+            const double avg_loss = evaluate_average_loss(model, inputs, targets);
+            std::cout << "Loss (" << epoch << "/" << epochs << "):  " << avg_loss << '\n';
         }
     }
 

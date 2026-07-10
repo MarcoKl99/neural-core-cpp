@@ -81,6 +81,9 @@ public:
     // Computation node if not leaf - Public for now, maybe to refactor later
     std::optional<ComputationNode> creator_node_;
 
+    // Reset the accumulated gradients on this Tensor instance
+    void zero_grad();
+
 private:
     std::vector<size_t> shape_;
     std::vector<double> data_;

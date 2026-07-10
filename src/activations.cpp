@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <functional>
+#include <memory>
 
 #include "nrt/parameter.hpp"
 
@@ -50,27 +51,27 @@ Tensor relu_backward(const Tensor& grad_output, const Tensor& x) {
     return grad_output.hadamard(relu_derivative(x));
 }
 
-Tensor ReLU::forward(Tensor& x) {
+std::shared_ptr<Tensor> ReLU::forward(std::shared_ptr<Tensor> x) {
     // Forward: y = relu(x)
-    Tensor result = relu(x);
+    auto result = std::make_shared<Tensor>(relu(*x));
 
     // Attach computation node for backward
-    result.creator_node_ =
-        ComputationNode{.inputs = {&x},
+    result->creator_node_ =
+        ComputationNode{.inputs = {x},
                         .backward_fn = [](Tensor& output, const Tensor& grad_output,
-                                          const std::vector<Tensor*>& inputs) {
-                            Tensor& x = *inputs[0];
+                                          const std::vector<std::shared_ptr<Tensor>>& inputs) {
+                            auto& x = inputs[0];
 
-                            // Chain rule: ∂L/∂x = ∂L/∂y * ∂y/∂x
-                            // where ∂y/∂x = relu_derivative(x)
+                            // Chain rule: dL/dx = dL/dy * dy/dx
+                            // where dy/dx = relu_derivative(x)
 
-                            Tensor grad_x = grad_output.hadamard(relu_derivative(x));
+                            Tensor grad_x = grad_output.hadamard(relu_derivative(*x));
 
                             // Accumulate gradient
-                            x.accumulate_gradient(grad_x);
+                            x->accumulate_gradient(grad_x);
 
                             // Recurse on input
-                            if (x.creator_node_) x.backward_impl(grad_x);
+                            if (x->creator_node_) x->backward_impl(grad_x);
                         }};
 
     return result;
@@ -100,27 +101,27 @@ Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x) {
     return grad_output.hadamard(sigmoid_derivative(x));
 }
 
-Tensor Sigmoid::forward(Tensor& x) {
+std::shared_ptr<Tensor> Sigmoid::forward(std::shared_ptr<Tensor> x) {
     // Forward: y = sigmoid(x)
-    Tensor result = sigmoid(x);
+    auto result = std::make_shared<Tensor>(sigmoid(*x));
 
     // Attach computation node for backward
-    result.creator_node_ =
-        ComputationNode{.inputs = {&x},
+    result->creator_node_ =
+        ComputationNode{.inputs = {x},
                         .backward_fn = [](Tensor& output, const Tensor& grad_output,
-                                          const std::vector<Tensor*>& inputs) {
-                            Tensor& x = *inputs[0];
+                                          const std::vector<std::shared_ptr<Tensor>>& inputs) {
+                            auto& x = inputs[0];
 
                             // Chain rule: dL/dx = dL/dy * dy/dx
                             // where dy/dx = sigmoid_derivative(x)
 
-                            Tensor grad_x = grad_output.hadamard(sigmoid_derivative(x));
+                            Tensor grad_x = grad_output.hadamard(sigmoid_derivative(*x));
 
                             // Accumulate gradient
-                            x.accumulate_gradient(grad_x);
+                            x->accumulate_gradient(grad_x);
 
                             // Recurse on input
-                            if (x.creator_node_) x.backward_impl(grad_x);
+                            if (x->creator_node_) x->backward_impl(grad_x);
                         }};
 
     return result;

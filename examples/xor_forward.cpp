@@ -11,21 +11,21 @@ int main() {
     nrt::Linear layer2(4, 1);
 
     // XOR-Table: Inputs and expected targets
-    std::vector<nrt::Tensor> inputs;
-    std::vector<nrt::Tensor> targets;
+    std::vector<std::shared_ptr<nrt::Tensor>> inputs;
+    std::vector<std::shared_ptr<nrt::Tensor>> targets;
 
     // Lambda function to create an input Tensor (e.g. {0, 1})
     auto make_input = [](double a, double b) {
-        nrt::Tensor x({2, 1});
-        x(0, 0) = a;
-        x(1, 0) = b;
+        auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+        (*x)(0, 0) = a;
+        (*x)(1, 0) = b;
         return x;
     };
 
     // Lambda function to create an output tensor (e.g. {1})
     auto make_target = [](double t) {
-        nrt::Tensor y({1, 1});
-        y(0, 0) = t;
+        auto y = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 1});
+        (*y)(0, 0) = t;
         return y;
     };
 
@@ -43,20 +43,23 @@ int main() {
 
     double total_loss = 0.0;
 
+    // Create the ReLU and Sigmoid activation functions
+    auto relu = nrt::ReLU{};
+    auto sigmoid = nrt::Sigmoid{};
+    auto criterion = nrt::MSELoss{};
+
     for (size_t i = 0; i < inputs.size(); ++i) {
-        nrt::Tensor& x = inputs[i];
-        const nrt::Tensor& target = targets[i];
+        auto x = inputs[i];
+        auto target = targets[i];
 
         // Forward Pass
-        nrt::Tensor hidden = nrt::relu(layer1.forward(x));
-        nrt::Tensor output = nrt::sigmoid(layer2.forward(hidden));
+        auto hidden = relu.forward(layer1.forward(x));
+        auto output = sigmoid.forward(layer2.forward(hidden));
 
-        double loss = nrt::mse(output, target);
-        total_loss += loss;
+        auto loss = criterion.forward(output, target);
+        total_loss += (*loss)(0, 0);
 
-        std::cout << "Input: (" << x(0, 0) << ", " << x(1, 0) << ")"
-                  << " -> Output: " << output(0, 0) << " (Target: " << target(0, 0) << ")"
-                  << ", Loss: " << loss << '\n';
+        std::cout << "Loss: " << (*loss)(0, 0) << '\n';
     }
 
     std::cout << "Average loss: " << total_loss / inputs.size() << '\n';

@@ -10,20 +10,20 @@ namespace nrt {
 Linear::Linear(size_t in_features, size_t out_features)
     : in_features_(in_features),
       out_features_(out_features),
-      weights_({out_features, in_features}),
-      bias_({out_features, 1}),
+      weights_(std::make_shared<Tensor>(std::vector<size_t>{out_features, in_features})),
+      bias_(std::make_shared<Tensor>(std::vector<size_t>{out_features, 1})),
       grad_weights_({out_features, in_features}),
       grad_bias_({out_features, 1}) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::normal_distribution<double> dist(0.0, 0.1);  // mu=0, sigma=0.1
+    std::normal_distribution<double> dist(0.0, 0.1);
 
     for (size_t i = 0; i < out_features_; ++i) {
         for (size_t j = 0; j < in_features_; ++j) {
-            weights_(i, j) = dist(gen);
+            (*weights_)(i, j) = dist(gen);  // dereference to reach operator()
         }
     }
-    // bias_ remains zero
+    // bias_ stays zero
 }
 
 void Linear::set_weights(const Tensor& w, const Tensor& b) {
@@ -36,18 +36,16 @@ void Linear::set_weights(const Tensor& w, const Tensor& b) {
     }
 
     // Set the values
-    weights_ = w;
-    bias_ = b;
+    *weights_ = w;
+    *bias_ = b;
 }
 
-Tensor Linear::forward(Tensor& x) {
-    if (x.shape() != std::vector<size_t>{in_features_, 1}) {
+std::shared_ptr<Tensor> Linear::forward(std::shared_ptr<Tensor> x) {
+    if (x->shape() != std::vector<size_t>{in_features_, 1}) {
         throw std::invalid_argument("Linear::forward: input shape mismatch");
     }
-
-    // Use autodiff operations - builds computation graph!
-    Tensor z = matmul_autodiff(weights_, x);
-    Tensor y = add_autodiff(z, bias_);
+    auto z = matmul_autodiff(weights_, x);  // passes the shared param straight in
+    auto y = add_autodiff(z, bias_);
     return y;
 }
 
@@ -73,7 +71,7 @@ Tensor Linear::backward(const Tensor& grad_output) {
     accumulation_count_ += 1;
 
     // dL/dx = W^T * grad_output
-    return weights_.transpose().matmul(grad_output);
+    return weights_->transpose().matmul(grad_output);
 }
 
 void Linear::zero_grad() {
@@ -99,8 +97,8 @@ Tensor Linear::average_grad_bias() const {
 
 std::vector<nrt::Parameter> Linear::parameters() {
     return {
-        {&weights_, &grad_weights_},
-        {&bias_, &grad_bias_},
+        {weights_.get()},
+        {bias_.get()},
     };
 }
 
@@ -114,11 +112,11 @@ size_t Linear::out_features() const {
 }
 
 Tensor& Linear::weights() {
-    return weights_;
+    return *weights_;
 }
 
 Tensor& Linear::bias() {
-    return bias_;
+    return *bias_;
 }
 
 }  // namespace nrt

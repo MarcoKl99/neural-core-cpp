@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "nrt/module.hpp"
@@ -20,7 +21,7 @@ public:
     virtual ~Linear() noexcept = default;
 
     // Implement the Module-methods
-    Tensor forward(Tensor& x) override;
+    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> x) override;  // matches Module
     std::vector<Parameter> parameters() override;
 
     // Overwrite randomly init weights for testing
@@ -43,8 +44,8 @@ public:
 private:
     size_t in_features_;
     size_t out_features_;
-    Tensor weights_;
-    Tensor bias_;
+    std::shared_ptr<Tensor> weights_;
+    std::shared_ptr<Tensor> bias_;
     std::optional<Tensor> last_input_;
     Tensor grad_weights_;
     Tensor grad_bias_;

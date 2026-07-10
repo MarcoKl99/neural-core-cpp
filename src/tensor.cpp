@@ -259,14 +259,7 @@ double Tensor::sum() const {
 
 // Autograd methods
 Tensor Tensor::gradient() {
-    std::cout << "gradient_shape_ size: " << gradient_shape_.size() << std::endl;
-    std::cout << "gradient_shape_ values:" << std::endl;
-    for (auto el : gradient_shape_) {
-        std::cout << el << std::endl;
-    }
-
     Tensor g(gradient_shape_);
-    std::cout << "Created Tensor!" << std::endl;
     g.data_ = gradient_data_;
     return g;
 }
@@ -303,6 +296,11 @@ void Tensor::accumulate_gradient(const Tensor& grad) {
 
 bool Tensor::is_leaf() {
     return !creator_node_.has_value();
+}
+
+void Tensor::zero_grad() {
+    gradient_shape_ = shape_;
+    gradient_data_.assign(data_.size(), 0.0);
 }
 
 }  // namespace nrt

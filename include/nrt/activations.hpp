@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "nrt/module.hpp"
 #include "nrt/parameter.hpp"
 #include "nrt/tensor.hpp"
@@ -20,13 +22,13 @@ Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x);
 
 class ReLU : public Module {
 public:
-    Tensor forward(Tensor& x) override;
+    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> x) override;
     std::vector<Parameter> parameters() override;
 };
 
 class Sigmoid : public Module {
 public:
-    Tensor forward(Tensor& x) override;
+    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> x) override;
     std::vector<Parameter> parameters() override;
 };
 
