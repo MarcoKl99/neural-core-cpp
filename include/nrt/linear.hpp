@@ -27,10 +27,6 @@ public:
     // Overwrite randomly init weights for testing
     void set_weights(const Tensor& w, const Tensor& b);
 
-    Tensor backward(const Tensor& grad_output);
-    void zero_grad();
-
-    // Note: Not const Tensor as a return type to enable std::move behavior by default
     size_t in_features() const;
     size_t out_features() const;
 
@@ -44,12 +40,6 @@ private:
     size_t out_features_;
     std::shared_ptr<Tensor> weights_;
     std::shared_ptr<Tensor> bias_;
-    std::optional<Tensor> last_input_;
-    Tensor grad_weights_;
-    Tensor grad_bias_;
-
-    // Count how many times .backward(...) has been called for now (for averaged gradients)
-    size_t accumulation_count_ = 0;
 };
 
 }  // namespace nrt

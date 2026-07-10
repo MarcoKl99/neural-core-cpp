@@ -16,10 +16,6 @@ Tensor sigmoid(const Tensor& x);
 Tensor relu_derivative(const Tensor& x);
 Tensor sigmoid_derivative(const Tensor& x);
 
-// Chained derivatives of the functions, taking
-Tensor relu_backward(const Tensor& grad_output, const Tensor& x);
-Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x);
-
 class ReLU : public Module {
 public:
     std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> x) override;

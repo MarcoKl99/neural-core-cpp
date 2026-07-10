@@ -46,11 +46,6 @@ Tensor relu_derivative(const Tensor& x) {
     return apply_elementwise(x, [](double v) { return v > 0.0 ? 1.0 : 0.0; });
 }
 
-Tensor relu_backward(const Tensor& grad_output, const Tensor& x) {
-    // Chain rule elementwise -> Hadamard product
-    return grad_output.hadamard(relu_derivative(x));
-}
-
 std::shared_ptr<Tensor> ReLU::forward(std::shared_ptr<Tensor> x) {
     // Forward: y = relu(x)
     auto result = std::make_shared<Tensor>(relu(*x));
@@ -94,11 +89,6 @@ Tensor sigmoid_derivative(const Tensor& x) {
         double s = 1.0 / (1.0 + std::exp(-v));
         return s * (1.0 - s);
     });
-}
-
-Tensor sigmoid_backward(const Tensor& grad_output, const Tensor& x) {
-    // Chain rule elementwise -> Hadamard product
-    return grad_output.hadamard(sigmoid_derivative(x));
 }
 
 std::shared_ptr<Tensor> Sigmoid::forward(std::shared_ptr<Tensor> x) {
