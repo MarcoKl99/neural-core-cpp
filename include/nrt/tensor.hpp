@@ -18,9 +18,9 @@ public:
     const std::vector<size_t>& shape() const;
     size_t size() const;  // Total number of elements in the tensor
 
-    // Note: In the following, 2 operator overloads are implemented
-    //       The compiler chooses the correct one depending on if the respective
-    //       tensor is const or not
+    /****************************/
+    /*    Operator Overloads    */
+    /****************************/
 
     // Function call operator overload for 1D
     // Works with a reference to be able to change the value

@@ -3,6 +3,8 @@
 #include <random>
 #include <stdexcept>
 
+#include "nrt/operations.hpp"
+
 namespace nrt {
 
 Linear::Linear(size_t in_features, size_t out_features)
@@ -39,16 +41,14 @@ void Linear::set_weights(const Tensor& w, const Tensor& b) {
 }
 
 Tensor Linear::forward(Tensor& x) {
-    // Check the shapes
     if (x.shape() != std::vector<size_t>{in_features_, 1}) {
         throw std::invalid_argument("Linear::forward: input shape mismatch");
     }
 
-    // Store the last input for .backward(...) later
-    last_input_ = x;
-
-    // Affine transformation
-    return weights_.matmul(x) + bias_;
+    // Use autodiff operations - builds computation graph!
+    Tensor z = matmul_autodiff(weights_, x);
+    Tensor y = add_autodiff(z, bias_);
+    return y;
 }
 
 Tensor Linear::backward(const Tensor& grad_output) {
@@ -113,11 +113,11 @@ size_t Linear::out_features() const {
     return out_features_;
 }
 
-const Tensor& Linear::weights() const {
+Tensor& Linear::weights() {
     return weights_;
 }
 
-const Tensor& Linear::bias() const {
+Tensor& Linear::bias() {
     return bias_;
 }
 

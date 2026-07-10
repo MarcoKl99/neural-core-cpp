@@ -37,8 +37,8 @@ public:
 
     // Return a const Tensor reference to avoid unneccesary copies at every call
     // (Tensor instances can be large)
-    const Tensor& weights() const;
-    const Tensor& bias() const;
+    Tensor& weights();
+    Tensor& bias();
 
 private:
     size_t in_features_;

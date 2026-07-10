@@ -259,7 +259,14 @@ double Tensor::sum() const {
 
 // Autograd methods
 Tensor Tensor::gradient() {
+    std::cout << "gradient_shape_ size: " << gradient_shape_.size() << std::endl;
+    std::cout << "gradient_shape_ values:" << std::endl;
+    for (auto el : gradient_shape_) {
+        std::cout << el << std::endl;
+    }
+
     Tensor g(gradient_shape_);
+    std::cout << "Created Tensor!" << std::endl;
     g.data_ = gradient_data_;
     return g;
 }
@@ -280,7 +287,7 @@ void Tensor::backward_impl(const Tensor& grad_output) {
 
     // Call the backward function for this operation
     // This will compute gradients for input tensors and recurse on them
-    creator_node_->backward_fn(*this, grad_output);
+    creator_node_->backward_fn(*this, grad_output, creator_node_->inputs);
 }
 
 void Tensor::accumulate_gradient(const Tensor& grad) {

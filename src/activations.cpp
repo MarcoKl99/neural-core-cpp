@@ -56,18 +56,22 @@ Tensor ReLU::forward(Tensor& x) {
 
     // Attach computation node for backward
     result.creator_node_ =
-        ComputationNode{.backward_fn = [&x](Tensor& output, const Tensor& grad_output) {
-            // Chain rule: ∂L/∂x = ∂L/∂y * ∂y/∂x
-            // where ∂y/∂x = relu_derivative(x)
+        ComputationNode{.inputs = {&x},
+                        .backward_fn = [](Tensor& output, const Tensor& grad_output,
+                                          const std::vector<Tensor*>& inputs) {
+                            Tensor& x = *inputs[0];
 
-            Tensor grad_x = grad_output.hadamard(relu_derivative(x));
+                            // Chain rule: ∂L/∂x = ∂L/∂y * ∂y/∂x
+                            // where ∂y/∂x = relu_derivative(x)
 
-            // Accumulate gradient
-            x.accumulate_gradient(grad_x);
+                            Tensor grad_x = grad_output.hadamard(relu_derivative(x));
 
-            // Recurse on input
-            if (x.creator_node_) x.backward_impl(grad_x);
-        }};
+                            // Accumulate gradient
+                            x.accumulate_gradient(grad_x);
+
+                            // Recurse on input
+                            if (x.creator_node_) x.backward_impl(grad_x);
+                        }};
 
     return result;
 }
@@ -102,18 +106,22 @@ Tensor Sigmoid::forward(Tensor& x) {
 
     // Attach computation node for backward
     result.creator_node_ =
-        ComputationNode{.backward_fn = [&x](Tensor& output, const Tensor& grad_output) {
-            // Chain rule: dL/dx = dL/dy * dy/dx
-            // where dy/dx = sigmoid_derivative(x)
+        ComputationNode{.inputs = {&x},
+                        .backward_fn = [](Tensor& output, const Tensor& grad_output,
+                                          const std::vector<Tensor*>& inputs) {
+                            Tensor& x = *inputs[0];
 
-            Tensor grad_x = grad_output.hadamard(sigmoid_derivative(x));
+                            // Chain rule: dL/dx = dL/dy * dy/dx
+                            // where dy/dx = sigmoid_derivative(x)
 
-            // Accumulate gradient
-            x.accumulate_gradient(grad_x);
+                            Tensor grad_x = grad_output.hadamard(sigmoid_derivative(x));
 
-            // Recurse on input
-            if (x.creator_node_) x.backward_impl(grad_x);
-        }};
+                            // Accumulate gradient
+                            x.accumulate_gradient(grad_x);
+
+                            // Recurse on input
+                            if (x.creator_node_) x.backward_impl(grad_x);
+                        }};
 
     return result;
 }

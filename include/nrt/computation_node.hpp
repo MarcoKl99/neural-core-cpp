@@ -10,9 +10,12 @@ class Tensor;
 
 // Represents a node in the computation graph
 struct ComputationNode {
-    // Backward function: computes gradients for inputs
-    // Signature: void(Tensor& output, const Tensor& grad_output)
-    std::function<void(Tensor&, const Tensor&)> backward_fn;
+    // Store pointers to input tensors (so they don't dangle when going out of scope)
+    std::vector<Tensor*> inputs;
+
+    // Backward function now receives inputs as parameters instead of capturing by reference
+    // Signature: void(output_tensor, gradient_wrt_output, input_pointers)
+    std::function<void(Tensor&, const Tensor&, const std::vector<Tensor*>&)> backward_fn;
 };
 
 }  // namespace nrt
