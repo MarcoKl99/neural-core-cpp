@@ -31,8 +31,6 @@ public:
     void zero_grad();
 
     // Note: Not const Tensor as a return type to enable std::move behavior by default
-    Tensor average_grad_weights() const;
-    Tensor average_grad_bias() const;
     size_t in_features() const;
     size_t out_features() const;
 

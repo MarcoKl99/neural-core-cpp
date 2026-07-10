@@ -81,20 +81,6 @@ void Linear::zero_grad() {
     accumulation_count_ = 0;
 }
 
-Tensor Linear::average_grad_weights() const {
-    if (accumulation_count_ == 0) {
-        throw std::logic_error("Linear::average_grad_weights: no gradients accumulated");
-    }
-    return grad_weights_ * (1.0 / static_cast<double>(accumulation_count_));
-}
-
-Tensor Linear::average_grad_bias() const {
-    if (accumulation_count_ == 0) {
-        throw std::logic_error("Linear::average_grad_bias: no gradients accumulated");
-    }
-    return grad_bias_ * (1.0 / static_cast<double>(accumulation_count_));
-}
-
 std::vector<nrt::Parameter> Linear::parameters() {
     return {
         {weights_.get()},
