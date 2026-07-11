@@ -40,13 +40,14 @@ optimizer.step();                         // gradient-descent update
 
 **Modules** (`nrt/module.hpp`)
 - `Module` base class (`forward` / `parameters`), mirroring `torch.nn.Module`
-- `Linear` — affine transform `y = W·x + b` (weights `{out, in}`, bias `{out, 1}`)
-- `ReLU`, `Sigmoid` — activations as graph nodes
+- `Linear` — affine transform `y = W·x + b` (weights `{out, in}`, bias `{out, 1}`), with **He / Xavier weight initialization** (`WeightInit::He` / `WeightInit::Xavier`) and an optional seed for reproducible init
+- `ReLU`, `Sigmoid`, `Softmax` — activations as graph nodes
 - `Sequential` — chains modules and aggregates their parameters
 
 **Losses** (`nrt/loss.hpp`)
 - `MSELoss` — mean-squared error as a differentiable graph node (`forward(y_hat, target)` → scalar tensor)
-- Free functions `mse` / `mse_derivative` for graph-free use
+- `CrossEntropyLoss` — softmax + negative-log-likelihood fused into one graph node (`forward(logits, target_class)` → scalar tensor); takes **raw logits**, softmax is applied internally
+- Free functions `mse` / `mse_derivative`, `cross_entropy` / `cross_entropy_grad` for graph-free use
 
 **Optimizer** (`nrt/optimizer.hpp`)
 - `SGD` — reads gradients straight from the parameter tensors (`step()`, `zero_grad()`)
@@ -68,7 +69,7 @@ optimizer.step();                         // gradient-descent update
 | `include/nrt/` | Public headers (tensor, autograd, modules, loss, optimizer) |
 | `src/` | Implementations |
 | `tests/` | Catch2 unit + integration tests (`test_*.cpp`) |
-| `examples/` | Runnable demos (`xor_forward`, `xor_training`) |
+| `examples/` | Runnable demos (`xor_forward`, `xor_training`, `xor_deep`, `three_class`) |
 | `notes/` | Write-ups, incl. the Dying-ReLU observation |
 | `CMakeLists.txt` | Build configuration |
 
@@ -89,6 +90,8 @@ cd build && ctest --output-on-failure
 # Run the examples
 ./build/xor_training   # full training loop (autograd + SGD)
 ./build/xor_forward    # forward pass only
+./build/xor_deep       # deeper XOR MLP (He/Xavier init)
+./build/three_class    # 3-class classification (Softmax + CrossEntropyLoss)
 ```
 
 ---
@@ -109,7 +112,7 @@ x ──▶ Linear ──▶ ReLU ──▶ Linear ──▶ Sigmoid ──▶ M
 ## Known limitations ⚠️
 
 - **Autograd is correct for chains and trees, not yet general DAGs.** The backward traversal is a plain recursion with no visited-set / topological ordering, so a tensor feeding two or more consumers would be double-counted. Fine for the current feed-forward models.
-- **Dying ReLU.** With unlucky random initialization, all hidden ReLU units can land in their zero-gradient region and training stalls — correct behaviour, but a practical pitfall. See `notes/` for a worked observation. (He/Xavier init and Leaky ReLU are not yet implemented.)
+- **Dying ReLU.** With unlucky random initialization, all hidden ReLU units can land in their zero-gradient region and training stalls — correct behaviour, but a practical pitfall. See `notes/` for a worked observation. **He / Xavier initialization** (see `Linear`) makes this far less likely in practice, though not impossible for an unlucky seed.
 - **No batch dimension** (1D/2D tensors only), **no broadcasting**, **CPU / double precision only**.
 - **`SGD` only** — no momentum / Adam yet.
 
@@ -117,10 +120,10 @@ x ──▶ Linear ──▶ ReLU ──▶ Linear ──▶ Sigmoid ──▶ M
 
 ## Roadmap 🚀
 
-- Better weight initialization (He / Xavier) to tame Dying ReLU
-- More activations (Leaky ReLU, Tanh) and losses (cross-entropy)
+- More activations (Leaky ReLU, Tanh)
 - General-DAG autograd (topological backward, gradient de-duplication)
 - Batch dimension, more optimizers (momentum, Adam), model save/load
+- MNIST with a raw MLP (Softmax + CrossEntropyLoss are now in place for this)
 
 ---
 
