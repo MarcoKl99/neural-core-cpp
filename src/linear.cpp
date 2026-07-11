@@ -1,18 +1,19 @@
 #include "nrt/linear.hpp"
 
+#include <optional>
 #include <random>
 
 #include "nrt/operations.hpp"
 
 namespace nrt {
 
-Linear::Linear(size_t in_features, size_t out_features, WeightInit init)
+Linear::Linear(size_t in_features, size_t out_features, WeightInit init,
+               std::optional<unsigned int> seed)
     : in_features_(in_features),
       out_features_(out_features),
       weights_(std::make_shared<Tensor>(std::vector<size_t>{out_features, in_features})),
       bias_(std::make_shared<Tensor>(std::vector<size_t>{out_features, 1})) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(seed.has_value() ? seed.value() : std::random_device{}());
 
     // He (Kaiming): for layers followed by ReLU. Xavier (Glorot): for Sigmoid/Tanh.
     double std_dev = (init == WeightInit::He)

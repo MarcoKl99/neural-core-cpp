@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <random>
 
 #include "nrt/module.hpp"
 #include "nrt/parameter.hpp"
@@ -19,7 +20,8 @@ public:
     -> y.shape = {out_features, 1}
     */
 
-    Linear(size_t in_features, size_t out_features, WeightInit init = WeightInit::He);
+    Linear(size_t in_features, size_t out_features, WeightInit init = WeightInit::He,
+           std::optional<unsigned int> seed = std::nullopt);
     virtual ~Linear() noexcept = default;
 
     // Implement the Module-methods

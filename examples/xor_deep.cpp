@@ -49,11 +49,11 @@ int main() {
     /*    Create the model    */
     /**************************/
     std::vector<std::unique_ptr<nrt::Module>> modules;
-    modules.push_back(std::make_unique<nrt::Linear>(2, 8, nrt::WeightInit::He));
+    modules.push_back(std::make_unique<nrt::Linear>(2, 8, nrt::WeightInit::He, 42));
     modules.push_back(std::make_unique<nrt::ReLU>());
-    modules.push_back(std::make_unique<nrt::Linear>(8, 8, nrt::WeightInit::He));
+    modules.push_back(std::make_unique<nrt::Linear>(8, 8, nrt::WeightInit::He, 123));
     modules.push_back(std::make_unique<nrt::ReLU>());
-    modules.push_back(std::make_unique<nrt::Linear>(8, 1, nrt::WeightInit::Xavier));
+    modules.push_back(std::make_unique<nrt::Linear>(8, 1, nrt::WeightInit::Xavier, 1));
     modules.push_back(std::make_unique<nrt::Sigmoid>());
 
     nrt::Sequential model(std::move(modules));
