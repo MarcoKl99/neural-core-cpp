@@ -276,3 +276,75 @@ TEST_CASE("Integration - deeper MLP (He/Xavier init) trains reliably on XOR",
     // Require that the model converged
     REQUIRE(final_loss < 0.01);
 }
+
+// =============================================================================
+// 5) SOFTMAX + CROSS-ENTROPY: analytic gradient (fused backward) must match
+//    finite differences through Linear -> CrossEntropyLoss (raw logits in).
+// =============================================================================
+TEST_CASE("Integration - CrossEntropyLoss gradient check (backward matches finite differences)",
+          "[integration][gradcheck][cross_entropy]") {
+    nrt::Linear layer(3, 4);  // 3 features -> 4 classes
+
+    nrt::Tensor w({4, 3});
+    w(0, 0) = 0.10;
+    w(0, 1) = -0.20;
+    w(0, 2) = 0.30;
+    w(1, 0) = -0.40;
+    w(1, 1) = 0.50;
+    w(1, 2) = 0.15;
+    w(2, 0) = 0.25;
+    w(2, 1) = -0.05;
+    w(2, 2) = 0.60;
+    w(3, 0) = -0.10;
+    w(3, 1) = 0.20;
+    w(3, 2) = -0.35;
+    nrt::Tensor b({4, 1});
+    b(0, 0) = 0.05;
+    b(1, 0) = -0.10;
+    b(2, 0) = 0.02;
+    b(3, 0) = 0.0;
+    layer.set_weights(w, b);
+
+    nrt::CrossEntropyLoss loss_fn;
+
+    const size_t target = 2;
+    auto x = col({0.5, -1.0, 2.0});
+
+    layer.weights().zero_grad();
+    layer.bias().zero_grad();
+    auto logits = layer.forward(x);
+    auto l = loss_fn.forward(logits, target);
+    l->backward();
+    nrt::Tensor grad_w = layer.weights().gradient();
+    nrt::Tensor grad_b = layer.bias().gradient();
+
+    auto loss_now = [&]() {
+        auto zz = layer.forward(x);
+        return nrt::cross_entropy(*zz, target);
+    };
+    const double eps = 1e-6;
+
+    for (size_t i = 0; i < 4; ++i) {
+        for (size_t j = 0; j < 3; ++j) {
+            double orig = layer.weights()(i, j);
+            layer.weights()(i, j) = orig + eps;
+            double lp = loss_now();
+            layer.weights()(i, j) = orig - eps;
+            double lm = loss_now();
+            layer.weights()(i, j) = orig;
+            double numeric = (lp - lm) / (2.0 * eps);
+            REQUIRE(approx_equal(grad_w(i, j), numeric, 1e-5));
+        }
+    }
+
+    for (size_t i = 0; i < 4; ++i) {
+        double orig = layer.bias()(i, 0);
+        layer.bias()(i, 0) = orig + eps;
+        double lp = loss_now();
+        layer.bias()(i, 0) = orig - eps;
+        double lm = loss_now();
+        layer.bias()(i, 0) = orig;
+        double numeric = (lp - lm) / (2.0 * eps);
+        REQUIRE(approx_equal(grad_b(i, 0), numeric, 1e-5));
+    }
+}

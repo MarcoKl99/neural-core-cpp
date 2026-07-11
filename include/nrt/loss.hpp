@@ -17,4 +17,16 @@ public:
     std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> y_hat, std::shared_ptr<Tensor> y);
 };
 
+// Cross-entropy over RAW LOGITS (softmax applied internally - do not pre-apply Softmax
+// yourself). target is a class index in [0, num_classes), not one-hot - mirrors
+// PyTorch's nn.CrossEntropyLoss.
+double cross_entropy(const Tensor& logits, size_t target);
+Tensor cross_entropy_grad(const Tensor& logits,
+                          size_t target);  // = softmax(logits) - one_hot(target)
+
+class CrossEntropyLoss {
+public:
+    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> y_hat, size_t target);
+};
+
 }  // namespace nrt

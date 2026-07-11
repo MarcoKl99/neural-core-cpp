@@ -121,4 +121,62 @@ std::vector<Parameter> Sigmoid::parameters() {
     return {};  // No learnable parameters
 }
 
+/*****************/
+/*    Softmax    */
+/*****************/
+
+Tensor softmax(const Tensor& x) {
+    if (x.rank() != 2 || x.shape()[1] != 1) {
+        throw std::invalid_argument("softmax: expected column vector shape {n,1}");
+    }
+    size_t n = x.shape()[0];
+
+    // Numerically stable: subtract the max before exponentiating
+    double max_val = x(0, 0);
+    for (size_t i = 1; i < n; ++i) {
+        if (x(i, 0) > max_val) max_val = x(i, 0);
+    }
+
+    Tensor result({n, 1});
+    double sum_exp = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        result(i, 0) = std::exp(x(i, 0) - max_val);
+        sum_exp += result(i, 0);
+    }
+    for (size_t i = 0; i < n; ++i) result(i, 0) /= sum_exp;
+
+    return result;
+}
+
+std::shared_ptr<Tensor> Softmax::forward(std::shared_ptr<Tensor> x) {
+    auto result = std::make_shared<Tensor>(softmax(*x));
+
+    result->creator_node_ =
+        ComputationNode{.inputs = {x},
+                        .backward_fn = [](Tensor& output, const Tensor& grad_output,
+                                          const std::vector<std::shared_ptr<Tensor>>& inputs) {
+                            auto& x = inputs[0];
+                            size_t n = output.shape()[0];
+
+                            // output is y = softmax(x) already - reuse it instead of recomputing.
+                            // dL/dx_i = y_i * (dL/dy_i - sum_j(dL/dy_j * y_j))
+                            double dot = 0.0;
+                            for (size_t i = 0; i < n; ++i) dot += grad_output(i, 0) * output(i, 0);
+
+                            Tensor grad_x(x->shape());
+                            for (size_t i = 0; i < n; ++i) {
+                                grad_x(i, 0) = output(i, 0) * (grad_output(i, 0) - dot);
+                            }
+
+                            x->accumulate_gradient(grad_x);
+                            if (x->creator_node_) x->backward_impl(grad_x);
+                        }};
+
+    return result;
+}
+
+std::vector<Parameter> Softmax::parameters() {
+    return {};  // No learnable parameters
+}
+
 }  // namespace nrt

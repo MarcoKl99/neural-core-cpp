@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 
+#include "nrt/activations.hpp"
 #include "nrt/loss.hpp"
 #include "nrt/tensor.hpp"
 
@@ -128,5 +129,118 @@ TEST_CASE("mse_derivative", "[loss][mse][backward]") {
         nrt::Tensor y_hat({2});
         nrt::Tensor y({3});
         REQUIRE_THROWS_AS(nrt::mse_derivative(y_hat, y), std::invalid_argument);
+    }
+}
+
+TEST_CASE("cross_entropy", "[loss][cross_entropy]") {
+    SECTION("Known value") {
+        // logits = [0, 1], target = 1
+        // probs = softmax([0,1]) = [1/(1+e), e/(1+e)], loss = -log(probs[1])
+        nrt::Tensor logits({2, 1});
+        logits(0, 0) = 0.0;
+        logits(1, 0) = 1.0;
+
+        // This is the reformulated result of the cross-entropy applied to the softmax
+        // Tests, if the softmax is applied internally correctly
+        double expected = std::log(1.0 + std::exp(1.0)) - 1.0;
+        REQUIRE(std::abs(nrt::cross_entropy(logits, 1) - expected) < 1e-9);
+    }
+
+    SECTION("Confident correct prediction gives near-zero loss") {
+        nrt::Tensor logits({3, 1});
+        logits(0, 0) = 10.0;
+        logits(1, 0) = -10.0;
+        logits(2, 0) = -10.0;
+
+        REQUIRE(nrt::cross_entropy(logits, 0) < 1e-6);
+    }
+
+    SECTION("Confident wrong prediction gives large loss") {
+        nrt::Tensor logits({3, 1});
+        logits(0, 0) = 10.0;
+        logits(1, 0) = -10.0;
+        logits(2, 0) = -10.0;
+
+        REQUIRE(nrt::cross_entropy(logits, 1) > 10.0);
+    }
+
+    SECTION("Uniform logits over n classes give loss = log(n)") {
+        nrt::Tensor logits({4, 1});
+        logits(0, 0) = logits(1, 0) = logits(2, 0) = logits(3, 0) = 0.0;
+
+        REQUIRE(std::abs(nrt::cross_entropy(logits, 2) - std::log(4.0)) < 1e-9);
+    }
+
+    SECTION("Non-column-vector shape throws") {
+        nrt::Tensor logits({2, 2});
+        REQUIRE_THROWS_AS(nrt::cross_entropy(logits, 0), std::invalid_argument);
+    }
+
+    SECTION("Out-of-range target throws") {
+        nrt::Tensor logits({3, 1});
+        REQUIRE_THROWS_AS(nrt::cross_entropy(logits, 5), std::out_of_range);
+    }
+}
+
+TEST_CASE("cross_entropy_grad", "[loss][cross_entropy][backward]") {
+    SECTION("Equals probs - one_hot(target)") {
+        nrt::Tensor logits({3, 1});
+        logits(0, 0) = 1.0;
+        logits(1, 0) = 2.0;
+        logits(2, 0) = 0.5;
+        const size_t target = 1;
+
+        nrt::Tensor grad = nrt::cross_entropy_grad(logits, target);
+        nrt::Tensor probs = nrt::softmax(logits);
+
+        for (size_t i = 0; i < 3; ++i) {
+            double expected = probs(i, 0) - (i == target ? 1.0 : 0.0);
+            REQUIRE(std::abs(grad(i, 0) - expected) < 1e-9);
+        }
+    }
+
+    SECTION("Gradient components sum to zero") {
+        // probs sums to 1, one_hot sums to 1 -> (probs - one_hot) sums to 0.
+        nrt::Tensor logits({4, 1});
+        logits(0, 0) = -1.0;
+        logits(1, 0) = 2.0;
+        logits(2, 0) = 0.3;
+        logits(3, 0) = 1.7;
+
+        nrt::Tensor grad = nrt::cross_entropy_grad(logits, 2);
+        REQUIRE(std::abs(grad.sum()) < 1e-9);
+    }
+}
+
+TEST_CASE("CrossEntropyLoss Autodiff - Forward pass") {
+    auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
+    (*logits)(0, 0) = 1.0;
+    (*logits)(1, 0) = 2.0;
+    (*logits)(2, 0) = 0.5;
+    const size_t target = 1;
+
+    nrt::CrossEntropyLoss loss_fn;
+    auto loss = loss_fn.forward(logits, target);
+
+    REQUIRE(loss->shape() == std::vector<size_t>{1, 1});
+    REQUIRE(std::abs((*loss)(0, 0) - nrt::cross_entropy(*logits, target)) < 1e-9);
+    REQUIRE(!(loss->is_leaf()));
+    REQUIRE(logits->is_leaf());
+}
+
+TEST_CASE("CrossEntropyLoss Autodiff - Backward pass matches cross_entropy_grad") {
+    auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
+    (*logits)(0, 0) = 1.0;
+    (*logits)(1, 0) = 2.0;
+    (*logits)(2, 0) = 0.5;
+    const size_t target = 1;
+
+    nrt::CrossEntropyLoss loss_fn;
+    auto loss = loss_fn.forward(logits, target);
+    loss->backward();
+
+    nrt::Tensor expected = nrt::cross_entropy_grad(*logits, target);
+    for (size_t i = 0; i < 3; ++i) {
+        REQUIRE(std::abs(logits->gradient()(i, 0) - expected(i, 0)) < 1e-9);
     }
 }

@@ -1,8 +1,10 @@
 #include "nrt/loss.hpp"
 
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 
+#include "nrt/activations.hpp"
 #include "nrt/computation_node.hpp"
 
 namespace nrt {
@@ -59,6 +61,46 @@ std::shared_ptr<Tensor> MSELoss::forward(std::shared_ptr<Tensor> y_hat, std::sha
 
                             // The target y is a constant
                         }};
+
+    return result;
+}
+
+double cross_entropy(const Tensor& logits, size_t target) {
+    if (logits.rank() != 2 || logits.shape()[1] != 1) {
+        throw std::invalid_argument("cross_entropy: expected column vector shape {n,1}");
+    }
+    if (target >= logits.shape()[0]) {
+        throw std::out_of_range("cross_entropy: target index out of range");
+    }
+
+    Tensor probs = softmax(logits);
+    constexpr double eps = 1e-12;  // guards log(0) if a probability underflows
+    return -std::log(probs(target, 0) + eps);
+}
+
+Tensor cross_entropy_grad(const Tensor& logits, size_t target) {
+    Tensor grad = softmax(logits);
+    grad(target, 0) -= 1.0;  // probs - one_hot(target)
+    return grad;
+}
+
+std::shared_ptr<Tensor> CrossEntropyLoss::forward(std::shared_ptr<Tensor> y_hat, size_t target) {
+    double loss_value = cross_entropy(*y_hat, target);
+    auto result = std::make_shared<Tensor>(std::vector<size_t>{1, 1});
+    (*result)(0, 0) = loss_value;
+
+    result->creator_node_ = ComputationNode{
+        .inputs = {y_hat},
+        .backward_fn = [target](Tensor& output, const Tensor& grad_output,
+                                const std::vector<std::shared_ptr<Tensor>>& inputs) {
+            auto& y_hat = inputs[0];
+
+            double upstream = grad_output(0, 0);
+            Tensor grad_logits = cross_entropy_grad(*y_hat, target) * upstream;
+
+            y_hat->accumulate_gradient(grad_logits);
+            if (y_hat->creator_node_) y_hat->backward_impl(grad_logits);
+        }};
 
     return result;
 }
