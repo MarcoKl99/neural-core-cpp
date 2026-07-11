@@ -91,12 +91,6 @@ private:
     // Autograd members
     std::vector<double> gradient_data_;   // Stores computed gradients
     std::vector<size_t> gradient_shape_;  // Shape of the gradient vector
-
-    // Those classes can call private methods and attributes
-    // Here: Layers must attach backward functions to Tensors
-    friend class Linear;
-    friend class ReLU;
-    friend class Sigmoid;
 };
 
 }  // namespace nrt

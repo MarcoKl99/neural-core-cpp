@@ -222,3 +222,65 @@ TEST_CASE("Integration - full MLP trains on XOR (Sequential + activations)", "[i
     double final = avg_loss();
     REQUIRE(final < initial * 0.5);  // meaningfully reduced
 }
+
+// =============================================================================
+// 4) DEEPER ARCHITECTURE + HE/XAVIER INIT: Sequential(2->8->8->1) with two
+//    ReLU hidden layers. Random init each run (no seed control in Linear), so
+//    instead of pinning weights we repeat several trials and require the vast
+//    majority to converge - proving He/Xavier init reliably avoids the
+//    Dying-ReLU trap from notes/xor_training.md even with more ReLU units,
+//    rather than testing one lucky fixed draw.
+// =============================================================================
+
+TEST_CASE("Integration - deeper MLP (He/Xavier init) trains reliably on XOR",
+          "[integration][xor][deep]") {
+    // Create the data
+    std::vector<std::shared_ptr<nrt::Tensor>> xs = {col({0.0, 0.0}), col({0.0, 1.0}),
+                                                    col({1.0, 0.0}), col({1.0, 1.0})};
+    std::vector<std::shared_ptr<nrt::Tensor>> ys = {col({0.0}), col({1.0}), col({1.0}), col({0.0})};
+
+    // Helper function to repeatedly create a new model (for all trail runs)
+    auto build_model = [] {
+        std::vector<std::unique_ptr<nrt::Module>> modules;
+        modules.push_back(std::make_unique<nrt::Linear>(2, 8, nrt::WeightInit::He));
+        modules.push_back(std::make_unique<nrt::ReLU>());
+        modules.push_back(std::make_unique<nrt::Linear>(8, 8, nrt::WeightInit::He));
+        modules.push_back(std::make_unique<nrt::ReLU>());
+        modules.push_back(std::make_unique<nrt::Linear>(8, 1, nrt::WeightInit::Xavier));
+        modules.push_back(std::make_unique<nrt::Sigmoid>());
+        return nrt::Sequential(std::move(modules));
+    };
+
+    // Helper function for loss calculation
+    auto avg_loss = [&](nrt::Sequential& model) {
+        double s = 0.0;
+        for (size_t i = 0; i < xs.size(); ++i) s += nrt::mse(*model.forward(xs[i]), *ys[i]);
+        return s / static_cast<double>(xs.size());
+    };
+
+    // Training runs
+    const int trials = 5;
+    int converged = 0;
+
+    for (int t = 0; t < trials; ++t) {
+        auto model = build_model();
+        nrt::MSELoss loss_fn;
+        auto params = model.parameters();
+        nrt::SGD opt(params, 0.1 / static_cast<double>(xs.size()));
+
+        for (int epoch = 0; epoch < 3000; ++epoch) {
+            opt.zero_grad();
+            for (size_t i = 0; i < xs.size(); ++i) {
+                auto pred = model.forward(xs[i]);
+                auto l = loss_fn.forward(pred, ys[i]);
+                l->backward();
+            }
+            opt.step();
+        }
+
+        if (avg_loss(model) < 0.02) ++converged;
+    }
+
+    // Require nearly all random draws to converge (not a fixed lucky seed).
+    REQUIRE(converged >= trials - 1);
+}

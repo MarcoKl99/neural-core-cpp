@@ -9,6 +9,8 @@
 
 namespace nrt {
 
+enum class WeightInit { He, Xavier };
+
 class Linear : public nrt::Module {
 public:
     /*
@@ -17,7 +19,7 @@ public:
     -> y.shape = {out_features, 1}
     */
 
-    Linear(size_t in_features, size_t out_features);
+    Linear(size_t in_features, size_t out_features, WeightInit init = WeightInit::He);
     virtual ~Linear() noexcept = default;
 
     // Implement the Module-methods

@@ -6,14 +6,19 @@
 
 namespace nrt {
 
-Linear::Linear(size_t in_features, size_t out_features)
+Linear::Linear(size_t in_features, size_t out_features, WeightInit init)
     : in_features_(in_features),
       out_features_(out_features),
       weights_(std::make_shared<Tensor>(std::vector<size_t>{out_features, in_features})),
       bias_(std::make_shared<Tensor>(std::vector<size_t>{out_features, 1})) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::normal_distribution<double> dist(0.0, 0.1);
+
+    // He (Kaiming): for layers followed by ReLU. Xavier (Glorot): for Sigmoid/Tanh.
+    double std_dev = (init == WeightInit::He)
+                         ? std::sqrt(2.0 / static_cast<double>(in_features_))
+                         : std::sqrt(2.0 / static_cast<double>(in_features_ + out_features_));
+    std::normal_distribution<double> dist(0.0, std_dev);
 
     for (size_t i = 0; i < out_features_; ++i) {
         for (size_t j = 0; j < in_features_; ++j) {

@@ -184,3 +184,71 @@ TEST_CASE("Linear forward backward propagates gradients") {
     REQUIRE(grad_w.size() > 0);
     REQUIRE(grad_b.size() > 0);
 }
+
+TEST_CASE("Linear weight initialization statistics", "[linear][init]") {
+    // Asymmetric shape on purpose: He depends only on fan_in, Xavier on fan_in+fan_out.
+    // If the two ever got swapped in the implementation, this would catch it -
+    // He std (sqrt(2/64) = 0.17678) and Xavier std (sqrt(2/320) = 0.07906) differ by ~2.2x.
+    constexpr size_t in_features = 64;
+    constexpr size_t out_features = 256;
+
+    // Returns {mean, stddev} over all weight entries.
+    auto weight_stats = [](nrt::Tensor& w, size_t rows, size_t cols) {
+        double n = static_cast<double>(rows * cols);
+        double mean = 0.0;
+        for (size_t i = 0; i < rows; ++i)
+            for (size_t j = 0; j < cols; ++j) mean += w(i, j);
+        mean /= n;
+
+        double variance = 0.0;
+        for (size_t i = 0; i < rows; ++i)
+            for (size_t j = 0; j < cols; ++j) {
+                double d = w(i, j) - mean;
+                variance += d * d;
+            }
+        variance /= n;
+
+        return std::pair<double, double>{mean, std::sqrt(variance)};
+    };
+
+    SECTION("He init std-dev matches sqrt(2/fan_in)") {
+        nrt::Linear layer(in_features, out_features, nrt::WeightInit::He);
+        auto [mean, stddev] = weight_stats(layer.weights(), out_features, in_features);
+
+        double expected_std = std::sqrt(2.0 / static_cast<double>(in_features));
+
+        REQUIRE(std::abs(mean) < 0.01);
+        REQUIRE(std::abs(stddev - expected_std) / expected_std < 0.1);  // within 10%
+    }
+
+    SECTION("Xavier init std-dev matches sqrt(2/(fan_in+fan_out))") {
+        nrt::Linear layer(in_features, out_features, nrt::WeightInit::Xavier);
+        auto [mean, stddev] = weight_stats(layer.weights(), out_features, in_features);
+
+        double expected_std = std::sqrt(2.0 / static_cast<double>(in_features + out_features));
+
+        REQUIRE(std::abs(mean) < 0.01);
+        REQUIRE(std::abs(stddev - expected_std) / expected_std < 0.1);
+    }
+
+    SECTION("He and Xavier produce different std-devs for the same shape") {
+        nrt::Linear he_layer(in_features, out_features, nrt::WeightInit::He);
+        nrt::Linear xavier_layer(in_features, out_features, nrt::WeightInit::Xavier);
+
+        auto [he_mean, he_std] = weight_stats(he_layer.weights(), out_features, in_features);
+        auto [xavier_mean, xavier_std] =
+            weight_stats(xavier_layer.weights(), out_features, in_features);
+
+        REQUIRE(he_std > xavier_std);
+    }
+
+    SECTION("Bias stays zero-initialized regardless of scheme") {
+        nrt::Linear he_layer(in_features, out_features, nrt::WeightInit::He);
+        nrt::Linear xavier_layer(in_features, out_features, nrt::WeightInit::Xavier);
+
+        for (size_t i = 0; i < out_features; ++i) {
+            REQUIRE(he_layer.bias()(i, 0) == 0.0);
+            REQUIRE(xavier_layer.bias()(i, 0) == 0.0);
+        }
+    }
+}
