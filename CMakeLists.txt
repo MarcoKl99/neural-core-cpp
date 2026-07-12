@@ -19,6 +19,12 @@ add_library(nrt_core
 target_include_directories(nrt_core PUBLIC include)
 add_library(nrt::core ALIAS nrt_core)
 
+option(NRT_ENABLE_COVERAGE "Enable coverage instrumentation (gcov/lcov)" OFF)
+if(NRT_ENABLE_COVERAGE)
+    target_compile_options(nrt_core PRIVATE -O0 -g --coverage)
+    target_link_options(nrt_core PRIVATE --coverage)
+endif()
+
 # Tests (Catch2)
 include(FetchContent)
 FetchContent_Declare(
@@ -41,6 +47,11 @@ add_executable(
     tests/test_integration.cpp
 )
 target_link_libraries(nrt_tests PRIVATE nrt::core Catch2::Catch2WithMain)
+
+if(NRT_ENABLE_COVERAGE)
+    target_compile_options(nrt_tests PRIVATE -O0 -g --coverage)
+    target_link_options(nrt_tests PRIVATE --coverage)
+endif()
 
 include(Catch)
 catch_discover_tests(nrt_tests)
