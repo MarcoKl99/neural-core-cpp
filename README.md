@@ -30,10 +30,101 @@ optimizer.step();                         // gradient-descent update
 The file `examples/mnist_mlp.cpp` implements the application of an MLP on the MNIST dataset, entirely using our own
 nrt:: functionalities.
 
-### Network
+### Model
 
 ```text
 Linear(784,256,He) -> ReLU -> Linear(256,128,He) -> ReLU -> Linear(128,10,Xavier) -> CrossEntropyLoss
+```
+
+**Implementation:**
+
+```cpp
+std::vector<std::unique_ptr<nrt::Module>> modules;
+modules.push_back(std::make_unique<nrt::Linear>(784, 256, nrt::WeightInit::He, kSeed));
+modules.push_back(std::make_unique<nrt::ReLU>());
+modules.push_back(std::make_unique<nrt::Linear>(256, 128, nrt::WeightInit::He, kSeed + 1));
+modules.push_back(std::make_unique<nrt::ReLU>());
+modules.push_back(std::make_unique<nrt::Linear>(128, 10, nrt::WeightInit::Xavier, kSeed + 2));
+nrt::Sequential model(std::move(modules));
+```
+
+**Number of Parameter:** 235'146
+
+**Final Test-Accuracy:** 93.2%
+
+**Subset of MNIST-Data:** 1'000 (train), 250 (test)
+
+### Training
+
+When trained for 10 epochs, the network learned the domain and was able to classify unseen test images.
+The output during training can be seen below.
+
+```text
+Initial train loss: 2.40211
+Initial test accuracy: 0.08
+
+Epoch 1/10 [##############################] 32/32 (100%) 1.13729 batch/s, ETA 0s
+Epoch 1/10 - train loss: 0.72951 - test accuracy: 0.80800
+
+Epoch 2/10 [##############################] 32/32 (100%) 1.14581 batch/s, ETA 0s
+Epoch 2/10 - train loss: 0.44695 - test accuracy: 0.85600
+
+Epoch 3/10 [##############################] 32/32 (100%) 1.14752 batch/s, ETA 0s
+Epoch 3/10 - train loss: 0.31221 - test accuracy: 0.89600
+
+Epoch 4/10 [##############################] 32/32 (100%) 1.14759 batch/s, ETA 0s
+Epoch 4/10 - train loss: 0.23676 - test accuracy: 0.91200
+
+Epoch 5/10 [##############################] 32/32 (100%) 1.14613 batch/s, ETA 0s
+Epoch 5/10 - train loss: 0.17425 - test accuracy: 0.91600
+
+Epoch 6/10 [##############################] 32/32 (100%) 1.14494 batch/s, ETA 0s
+Epoch 6/10 - train loss: 0.13542 - test accuracy: 0.90000
+
+Epoch 7/10 [##############################] 32/32 (100%) 1.14451 batch/s, ETA 0s
+Epoch 7/10 - train loss: 0.11163 - test accuracy: 0.91200
+
+Epoch 8/10 [##############################] 32/32 (100%) 1.14705 batch/s, ETA 0s
+Epoch 8/10 - train loss: 0.07724 - test accuracy: 0.90800
+
+Epoch 9/10 [##############################] 32/32 (100%) 1.14427 batch/s, ETA 0s
+Epoch 9/10 - train loss: 0.05909 - test accuracy: 0.92000
+
+Epoch 10/10 [##############################] 32/32 (100%) 1.14762 batch/s, ETA 0s
+Epoch 10/10 - train loss: 0.05339 - test accuracy: 0.93200
+
+Final train loss: 0.05339
+Final test accuracy: 0.93200
+```
+
+Also, a small evaluation was implemented, showing the predicted class together with an ASCII art representation
+of the input images.
+
+```text
+Sample 1 - true label: 6, predicted: 6  (correct)
+
+                            
+                            
+              ##            
+             ##.            
+            .##             
+            ##              
+           ##.              
+          .##               
+          ##.               
+         .##                
+         ##                 
+        .#.                 
+        ##                  
+        ##                  
+        ##      .###        
+        #.     ######       
+        ##     #.  ##.      
+        ##    ..    ##      
+        ###         ##      
+         ###.      .#.      
+          .#####.####       
+            .######.        
 ```
 
 ---
@@ -119,15 +210,6 @@ x ──▶ Linear ──▶ ReLU ──▶ Linear ──▶ Sigmoid ──▶ M
                         gradients flow back through the graph  ▼
         dL/dW, dL/db accumulate into each Linear's parameters via backward()
 ```
-
----
-
-## Known limitations ⚠️
-
-- **Autograd is correct for chains and trees, not yet general DAGs.** The backward traversal is a plain recursion with no visited-set / topological ordering, so a tensor feeding two or more consumers would be double-counted. Fine for the current feed-forward models.
-- **Dying ReLU.** With unlucky random initialization, all hidden ReLU units can land in their zero-gradient region and training stalls — correct behaviour, but a practical pitfall. See `notes/` for a worked observation. **He / Xavier initialization** (see `Linear`) makes this far less likely in practice, though not impossible for an unlucky seed.
-- **No batch dimension** (1D/2D tensors only), **no broadcasting**, **CPU / double precision only**.
-- **`SGD` only** — no momentum / Adam yet.
 
 ---
 
