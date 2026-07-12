@@ -1,6 +1,7 @@
 # Neural Runtime C++ 🧠
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)<br>
+[![CI](https://github.com/MarcoKl99/neural-runtime-cpp/actions/workflows/ci.yaml/badge.svg)](https://github.com/MarcoKl99/neural-runtime-cpp/actions/workflows/ci.yaml)
 
 A small deep-learning runtime in modern C++ (C++20), built from first principles — **Tensors, a reverse-mode autograd engine, neural-network modules, losses, and optimizers**, with **no ML dependencies** in the core. The goal is a clean, PyTorch-flavoured API.
 
@@ -69,26 +70,7 @@ Epoch 1/10 - train loss: 0.72951 - test accuracy: 0.80800
 Epoch 2/10 [##############################] 32/32 (100%) 1.14581 batch/s, ETA 0s
 Epoch 2/10 - train loss: 0.44695 - test accuracy: 0.85600
 
-Epoch 3/10 [##############################] 32/32 (100%) 1.14752 batch/s, ETA 0s
-Epoch 3/10 - train loss: 0.31221 - test accuracy: 0.89600
-
-Epoch 4/10 [##############################] 32/32 (100%) 1.14759 batch/s, ETA 0s
-Epoch 4/10 - train loss: 0.23676 - test accuracy: 0.91200
-
-Epoch 5/10 [##############################] 32/32 (100%) 1.14613 batch/s, ETA 0s
-Epoch 5/10 - train loss: 0.17425 - test accuracy: 0.91600
-
-Epoch 6/10 [##############################] 32/32 (100%) 1.14494 batch/s, ETA 0s
-Epoch 6/10 - train loss: 0.13542 - test accuracy: 0.90000
-
-Epoch 7/10 [##############################] 32/32 (100%) 1.14451 batch/s, ETA 0s
-Epoch 7/10 - train loss: 0.11163 - test accuracy: 0.91200
-
-Epoch 8/10 [##############################] 32/32 (100%) 1.14705 batch/s, ETA 0s
-Epoch 8/10 - train loss: 0.07724 - test accuracy: 0.90800
-
-Epoch 9/10 [##############################] 32/32 (100%) 1.14427 batch/s, ETA 0s
-Epoch 9/10 - train loss: 0.05909 - test accuracy: 0.92000
+[...]
 
 Epoch 10/10 [##############################] 32/32 (100%) 1.14762 batch/s, ETA 0s
 Epoch 10/10 - train loss: 0.05339 - test accuracy: 0.93200
