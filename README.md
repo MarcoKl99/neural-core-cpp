@@ -1,9 +1,9 @@
-# Neural Runtime C++ 🧠
+# Neural Core C++ 🧠
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)<br>
-[![CI](https://github.com/MarcoKl99/neural-runtime-cpp/actions/workflows/ci.yaml/badge.svg)](https://github.com/MarcoKl99/neural-runtime-cpp/actions/workflows/ci.yaml)
+[![CI](https://github.com/MarcoKl99/neural-core-cpp/actions/workflows/ci.yaml/badge.svg)](https://github.com/MarcoKl99/neural-core-cpp/actions/workflows/ci.yaml)
 
-A C++20 neural runtime built from first principles to explore the engineering behind deep learning systems.
+A C++20 project on neural networks, implementing the core functionalities of deep learning from first principles, without external ML libraries.
 
 ## Components 🧱
 
