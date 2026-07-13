@@ -45,6 +45,7 @@ add_executable(
     tests/test_optimizer.cpp
     tests/test_operations.cpp
     tests/test_integration.cpp
+    tests/test_sequential.cpp
 )
 target_link_libraries(nrt_tests PRIVATE nrt::core Catch2::Catch2WithMain)
 
