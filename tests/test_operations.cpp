@@ -435,3 +435,119 @@ TEST_CASE("Chain: MatMul -> Add -> Subtract -> Backward") {
     REQUIRE(tensors_approx_equal(b->gradient(), expected_grad_b));
     REQUIRE(tensors_approx_equal(penalty->gradient(), expected_grad_penalty));
 }
+
+TEST_CASE("Reshape Autodiff - Forward pass") {
+    auto a = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    (*a)(0, 0) = 1.0;
+    (*a)(0, 1) = 2.0;
+    (*a)(0, 2) = 3.0;
+    (*a)(1, 0) = 4.0;
+    (*a)(1, 1) = 5.0;
+    (*a)(1, 2) = 6.0;
+
+    auto b = nrt::reshape_autodiff(a, {3, 2});
+
+    nrt::Tensor expected({3, 2});
+    expected(0, 0) = 1.0;
+    expected(0, 1) = 2.0;
+    expected(1, 0) = 3.0;
+    expected(1, 1) = 4.0;
+    expected(2, 0) = 5.0;
+    expected(2, 1) = 6.0;
+
+    REQUIRE(tensors_approx_equal(*b, expected));
+}
+
+TEST_CASE("Reshape Autodiff - Leaf tensor identification") {
+    auto a = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    REQUIRE(a->is_leaf());
+
+    auto b = nrt::reshape_autodiff(a, {3, 2});
+
+    REQUIRE(a->is_leaf());
+    REQUIRE(!(b->is_leaf()));
+}
+
+TEST_CASE("Reshape Autodiff - Backward pass restores original shape") {
+    auto a = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    (*a)(0, 0) = 1.0;
+    (*a)(0, 1) = 2.0;
+    (*a)(0, 2) = 3.0;
+    (*a)(1, 0) = 4.0;
+    (*a)(1, 1) = 5.0;
+    (*a)(1, 2) = 6.0;
+
+    auto b = nrt::reshape_autodiff(a, {3, 2});
+    b->backward();
+
+    // grad_b is seeded all 1.0 (shape {3,2}); reshaped back it's still all
+    // 1.0, just with a's original shape {2,3}. This only checks the SHAPE
+    // comes back right - it can't catch a bug that scrambles positions,
+    // since every value here is identical anyway. See the chained test below.
+    nrt::Tensor expected_grad_a({2, 3});
+    expected_grad_a(0, 0) = 1.0;
+    expected_grad_a(0, 1) = 1.0;
+    expected_grad_a(0, 2) = 1.0;
+    expected_grad_a(1, 0) = 1.0;
+    expected_grad_a(1, 1) = 1.0;
+    expected_grad_a(1, 2) = 1.0;
+
+    REQUIRE(tensors_approx_equal(a->gradient(), expected_grad_a));
+}
+
+TEST_CASE("Chain: MatMul -> Reshape -> Backward") {
+    // a gets reshaped into b, then b is matmul'd with c. Because c's rows
+    // hold DISTINCT values, the gradient reaching b (and then a) is
+    // non-uniform - which is what lets this test catch a reshape bug that
+    // transposes/reorders positions instead of relabeling them in place.
+    auto a = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    (*a)(0, 0) = 1.0;
+    (*a)(0, 1) = 2.0;
+    (*a)(0, 2) = 3.0;
+    (*a)(1, 0) = 4.0;
+    (*a)(1, 1) = 5.0;
+    (*a)(1, 2) = 6.0;
+
+    auto c = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    (*c)(0, 0) = 1.0;
+    (*c)(0, 1) = 2.0;
+    (*c)(0, 2) = 3.0;
+    (*c)(1, 0) = 4.0;
+    (*c)(1, 1) = 5.0;
+    (*c)(1, 2) = 6.0;
+
+    // Forward: b = a.reshape({3,2}) = [[1,2],[3,4],[5,6]], d = c @ b
+    auto b = nrt::reshape_autodiff(a, {3, 2});
+    auto d = nrt::matmul_autodiff(c, b);
+
+    // d[0][0] = 1*1 + 2*3 + 3*5 = 22   d[0][1] = 1*2 + 2*4 + 3*6 = 28
+    // d[1][0] = 4*1 + 5*3 + 6*5 = 49   d[1][1] = 4*2 + 5*4 + 6*6 = 64
+    nrt::Tensor expected_d({2, 2});
+    expected_d(0, 0) = 22.0;
+    expected_d(0, 1) = 28.0;
+    expected_d(1, 0) = 49.0;
+    expected_d(1, 1) = 64.0;
+    REQUIRE(tensors_approx_equal(*d, expected_d));
+
+    // Backward
+    d->backward();
+
+    // grad_d = [[1,1],[1,1]]
+    // grad_b = c.transpose() @ grad_d - each row of grad_b is the sum of
+    // the corresponding COLUMN of c (since grad_d's columns are both [1,1]):
+    // column 0 of c: 1+4=5   column 1: 2+5=7   column 2: 3+6=9
+    // grad_b = [[5,5],[7,7],[9,9]]   (shape {3,2})
+    //
+    // reshape_autodiff's backward reinterprets grad_b's flat sequence
+    // [5,5,7,7,9,9] back into a's original shape {2,3}, row-major:
+    // grad_a = [[5,5,7],[7,9,9]]
+    nrt::Tensor expected_grad_a({2, 3});
+    expected_grad_a(0, 0) = 5.0;
+    expected_grad_a(0, 1) = 5.0;
+    expected_grad_a(0, 2) = 7.0;
+    expected_grad_a(1, 0) = 7.0;
+    expected_grad_a(1, 1) = 9.0;
+    expected_grad_a(1, 2) = 9.0;
+
+    REQUIRE(tensors_approx_equal(a->gradient(), expected_grad_a));
+}

@@ -8,9 +8,8 @@
 namespace nrt {
 
 Tensor::Tensor(std::vector<size_t> shape) : shape_(std::move(shape)) {
-    // Check if the shape is correct - only 1D and 2D for now
-    if (shape_.size() != 1 && shape_.size() != 2) {
-        throw std::invalid_argument("Tensor: shape must have rank 1 or 2");
+    if (shape_.empty()) {
+        throw std::invalid_argument("Tensor: shape must have at least rank 1");
     }
 
     // Check if the given shape does not have a value of 0 in a dimension
@@ -27,6 +26,9 @@ Tensor::Tensor(std::vector<size_t> shape) : shape_(std::move(shape)) {
 
     // Assign 0.0 to all elements in the data vector
     data_.assign(total, 0.0);
+
+    // Compute the strides
+    compute_strides();
 }
 
 size_t Tensor::rank() const {
@@ -39,57 +41,6 @@ const std::vector<size_t>& Tensor::shape() const {
 
 size_t Tensor::size() const {
     return data_.size();
-}
-
-double& Tensor::operator()(size_t i) {
-    // This operator overload is only for Tensors of rank 1
-    if (rank() != 1) {
-        throw std::invalid_argument("Tensor: 1-argument access requires rank 1");
-    }
-
-    // If an element out of ranged is accessed
-    if (i >= shape_[0]) {
-        throw std::out_of_range("Tensor: index out of range");
-    }
-
-    // Simply return the value at the index, as the tensor is 1D
-    return data_[i];
-}
-
-// Same as for the operator overload above (non-const version)
-double Tensor::operator()(size_t i) const {
-    if (rank() != 1) {
-        throw std::invalid_argument("Tensor: 1-argument access requires rank 1");
-    }
-    if (i >= shape_[0]) {
-        throw std::out_of_range("Tensor: index out of range");
-    }
-    return data_[i];
-}
-
-double& Tensor::operator()(size_t i, size_t j) {
-    if (rank() != 2) {
-        throw std::invalid_argument("Tensor: 2-argument access requires rank 2");
-    }
-    if (i >= shape_[0] || j >= shape_[1]) {
-        throw std::out_of_range("Tensor: index out of range");
-    }
-
-    // Access the element based on the row-major pattern
-    // -> Flat representation of the Tensor is an array that can be accessed
-    // like seen below
-    return data_[i * shape_[1] + j];
-}
-
-// Same as for the operator overload above (non-const version)
-double Tensor::operator()(size_t i, size_t j) const {
-    if (rank() != 2) {
-        throw std::invalid_argument("Tensor: 2-argument access requires rank 2");
-    }
-    if (i >= shape_[0] || j >= shape_[1]) {
-        throw std::out_of_range("Tensor: index out of range");
-    }
-    return data_[i * shape_[1] + j];
 }
 
 void Tensor::print(std::size_t precision) const {
@@ -113,8 +64,12 @@ void Tensor::print(std::size_t precision) const {
             std::cout << std::endl;
         }
     } else {
-        // Error
-        throw std::logic_error("unreachable - Hmm... we should not be here...");
+        // Cannot nicely display the values - fallback
+        std::cout << "Tensor(";
+        for (std::size_t i = 0; i < rank() - 1; ++i) {
+            std::cout << shape_[i] << ",";
+        }
+        std::cout << shape_[rank() - 1] << ")" << '\n';
     }
 }
 
@@ -248,6 +203,20 @@ Tensor Tensor::transpose() const {
     return result;
 }
 
+Tensor Tensor::reshape(const std::vector<size_t>& new_shape) const {
+    size_t new_total =
+        std::accumulate(new_shape.begin(), new_shape.end(), size_t{1}, std::multiplies<size_t>());
+    if (new_total != size()) {
+        throw std::invalid_argument("Tensor::reshape: element count mismatch");
+    }
+
+    // Simply create the new tensor and copy the data vector, as only the offset computation in the
+    // constructor changes
+    Tensor result(new_shape);
+    result.data_ = data_;
+    return result;
+}
+
 // Helper function e.g. for the MSE-loss
 double Tensor::sum() const {
     double total = 0.0;
@@ -301,6 +270,18 @@ bool Tensor::is_leaf() {
 void Tensor::zero_grad() {
     gradient_shape_ = shape_;
     gradient_data_.assign(data_.size(), 0.0);
+}
+
+void Tensor::compute_strides() {
+    // Init all values with 1 as the last value is always 1
+    // Note that this initialization produces the correct result for a 1D tensor,
+    // even if the loop below is never entered
+    strides_.assign(shape_.size(), 1);
+
+    // Reverse loop to apply the general strides formula
+    for (int d = static_cast<int>(shape_.size()) - 2; d >= 0; --d) {
+        strides_[d] = strides_[d + 1] * shape_[d + 1];
+    }
 }
 
 }  // namespace nrt

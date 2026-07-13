@@ -109,4 +109,28 @@ std::shared_ptr<Tensor> subtract_autodiff(std::shared_ptr<Tensor> a, std::shared
     return result;
 }
 
+std::shared_ptr<Tensor> reshape_autodiff(std::shared_ptr<Tensor> a,
+                                         const std::vector<size_t>& new_shape) {
+    // Forward: z = a.reshape(new_shape)
+    auto result = std::make_shared<Tensor>(a->reshape(new_shape));
+
+    // Attach computation node for backward
+    result->creator_node_ =
+        ComputationNode{.inputs = {a},
+                        .backward_fn = [](Tensor& result_output, const Tensor& grad_result,
+                                          const std::vector<std::shared_ptr<Tensor>>& inputs) {
+                            auto& a = inputs[0];
+
+                            // Reshape's local derivative is the identity - it's a pure relabeling
+                            // of the same values, so the gradient just needs to be reshaped back
+                            // to a's original shape before it flows further upstream.
+                            Tensor grad_a = grad_result.reshape(a->shape());
+
+                            a->accumulate_gradient(grad_a);
+                            if (a->creator_node_) a->backward_impl(grad_a);
+                        }};
+
+    return result;
+}
+
 }  // namespace nrt

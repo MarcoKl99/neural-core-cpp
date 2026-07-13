@@ -25,15 +25,18 @@ TEST_CASE("Tensor construction with valid shapes", "[tensor][construction]") {
             }
         }
     }
+
+    SECTION("Multi-dimensional construction") {
+        nrt::Tensor t({3, 4, 3});
+        REQUIRE(t.rank() == 3);
+        REQUIRE(t.shape() == std::vector<size_t>{3, 4, 3});
+        REQUIRE(t.size() == 36);
+    }
 }
 
 TEST_CASE("Tensor construction with invalid shapes throws", "[tensor][construction][errors]") {
     SECTION("rank 0 (empty shape) throws") {
         REQUIRE_THROWS_AS(nrt::Tensor({}), std::invalid_argument);
-    }
-
-    SECTION("rank 3 throws") {
-        REQUIRE_THROWS_AS(nrt::Tensor({2, 3, 4}), std::invalid_argument);
     }
 
     SECTION("zero dimension throws") {
@@ -104,7 +107,143 @@ TEST_CASE("Tensor 2D element access", "[tensor][access]") {
     }
 }
 
+TEST_CASE("Tensor rank-3 element access bounds", "[tensor][access]") {
+    nrt::Tensor t({2, 3, 4});
+
+    SECTION("out of range on first dimension throws") {
+        REQUIRE_THROWS_AS(t(2, 0, 0), std::out_of_range);
+    }
+
+    SECTION("out of range on second dimension throws") {
+        REQUIRE_THROWS_AS(t(0, 3, 0), std::out_of_range);
+    }
+
+    SECTION("out of range on third dimension throws") {
+        REQUIRE_THROWS_AS(t(0, 0, 4), std::out_of_range);
+    }
+
+    SECTION("out of range throws (const version)") {
+        const nrt::Tensor t_const({2, 3, 4});
+        REQUIRE_THROWS_AS(t_const(2, 0, 0), std::out_of_range);
+    }
+
+    SECTION("too few indices throws") {
+        REQUIRE_THROWS_AS(t(0, 0), std::invalid_argument);
+    }
+
+    SECTION("too many indices throws") {
+        REQUIRE_THROWS_AS(t(0, 0, 0, 0), std::invalid_argument);
+    }
+
+    SECTION("too few indices throws (const version)") {
+        const nrt::Tensor t_const({2, 3, 4});
+        REQUIRE_THROWS_AS(t_const(0, 0), std::invalid_argument);
+    }
+}
+
+TEST_CASE("Multi-dimensional tensor access", "[tensor][access]") {
+    SECTION("6D tensor access") {
+        auto t_multi = nrt::Tensor({2, 3, 4, 2, 3, 4});
+        t_multi(1, 2, 1, 0, 0, 0) = 1.0;
+
+        REQUIRE(t_multi(1, 2, 1, 0, 0, 0) == 1.0);
+    }
+
+    SECTION("Distinct values at every position map to correct, non-colliding offsets") {
+        nrt::Tensor t({2, 3, 4});
+
+        // Phase 1: write a value to every valid index. Nothing is checked yet.
+        int counter = 0;
+        for (size_t i = 0; i < 2; ++i) {
+            for (size_t j = 0; j < 3; ++j) {
+                for (size_t k = 0; k < 4; ++k) {
+                    t(i, j, k) = static_cast<double>(counter++);
+                }
+            }
+        }
+
+        // Phase 2: re-read every index and check it still holds the exact value
+        // that was written to THAT tuple.
+        counter = 0;
+        for (size_t i = 0; i < 2; ++i) {
+            for (size_t j = 0; j < 3; ++j) {
+                for (size_t k = 0; k < 4; ++k) {
+                    REQUIRE(t(i, j, k) == static_cast<double>(counter++));
+                }
+            }
+        }
+    }
+}
+
 // Mathematical Operations
+
+TEST_CASE("Tensor elementwise operations on rank-3 tensors", "[tensor][elementwise]") {
+    nrt::Tensor t1({2, 2, 2});
+    nrt::Tensor t2({2, 2, 2});
+
+    // Fill values with a running counter
+    int counter1 = 1;
+    int counter2 = 10;
+    for (size_t i = 0; i < 2; ++i) {
+        for (size_t j = 0; j < 2; ++j) {
+            for (size_t k = 0; k < 2; ++k) {
+                t1(i, j, k) = static_cast<double>(counter1++);
+                t2(i, j, k) = static_cast<double>(counter2++);
+            }
+        }
+    }
+    // t1 ranges 1..8 in row-major order, t2 ranges 10..17
+
+    SECTION("operator+ adds element-wise") {
+        nrt::Tensor t3 = t1 + t2;
+        REQUIRE(t3(0, 0, 0) == 11.0);  // 1 + 10
+        REQUIRE(t3(1, 1, 1) == 25.0);  // 8 + 17
+    }
+
+    SECTION("operator+= adds in place") {
+        t1 += t2;
+        REQUIRE(t1(0, 0, 0) == 11.0);
+        REQUIRE(t1(1, 1, 1) == 25.0);
+    }
+
+    SECTION("operator- subtracts element-wise") {
+        nrt::Tensor t3 = t2 - t1;
+        REQUIRE(t3(0, 0, 0) == 9.0);
+        REQUIRE(t3(1, 1, 1) == 9.0);
+    }
+
+    SECTION("operator-= subtracts in place") {
+        t1 -= t2;
+        REQUIRE(t1(0, 0, 0) == -9.0);
+        REQUIRE(t1(1, 1, 1) == -9.0);
+    }
+
+    SECTION("hadamard multiplies element-wise") {
+        nrt::Tensor t3 = t1.hadamard(t2);
+        REQUIRE(t3(0, 0, 0) == 10.0);   // 1 * 10
+        REQUIRE(t3(1, 1, 1) == 136.0);  // 8 * 17
+    }
+
+    SECTION("scalar multiplication scales every element") {
+        nrt::Tensor result = t1 * 2.0;
+        REQUIRE(result(0, 0, 0) == 2.0);
+        REQUIRE(result(1, 1, 1) == 16.0);
+    }
+
+    SECTION("shape mismatch (same rank, different shape) throws") {
+        nrt::Tensor t_other_shape({2, 2, 3});
+        REQUIRE_THROWS_AS(t1 + t_other_shape, std::invalid_argument);
+        REQUIRE_THROWS_AS(t1 - t_other_shape, std::invalid_argument);
+        REQUIRE_THROWS_AS(t1.hadamard(t_other_shape), std::invalid_argument);
+    }
+
+    SECTION("shape mismatch (different rank) throws") {
+        nrt::Tensor t_other_rank({2, 2});
+        REQUIRE_THROWS_AS(t1 + t_other_rank, std::invalid_argument);
+        REQUIRE_THROWS_AS(t1 - t_other_rank, std::invalid_argument);
+        REQUIRE_THROWS_AS(t1.hadamard(t_other_rank), std::invalid_argument);
+    }
+}
 
 // Addition
 TEST_CASE("Tensor 2D addition", "[tensor][addition]") {
@@ -495,6 +634,22 @@ TEST_CASE("Tensor matmul shape validation", "[tensor][matmul][errors]") {
         nrt::Tensor rank1({3});
         REQUIRE_THROWS_AS(a.matmul(rank1), std::invalid_argument);
     }
+
+    SECTION("Rank-3 left operand throws") {
+        nrt::Tensor rank3({2, 3, 4});
+        REQUIRE_THROWS_AS(rank3.matmul(b), std::invalid_argument);
+    }
+
+    SECTION("Rank-3 right operand throws") {
+        nrt::Tensor rank3({2, 3, 4});
+        REQUIRE_THROWS_AS(a.matmul(rank3), std::invalid_argument);
+    }
+
+    SECTION("Rank-3 on both tensors throws") {
+        nrt::Tensor rank3_1({2, 2, 2});
+        nrt::Tensor rank3_2({2, 2, 2});
+        REQUIRE_THROWS_AS(rank3_1.matmul(rank3_2), std::invalid_argument);
+    }
 }
 
 // Transpose
@@ -568,5 +723,67 @@ TEST_CASE("Tensor transpose", "[tensor][transpose]") {
     SECTION("Rank-1 tensor throws") {
         nrt::Tensor v({3});
         REQUIRE_THROWS_AS(v.transpose(), std::invalid_argument);
+    }
+
+    SECTION("Rank-3 tensor throws") {
+        nrt::Tensor t3({2, 3, 4});
+        REQUIRE_THROWS_AS(t3.transpose(), std::invalid_argument);
+    }
+}
+
+TEST_CASE("Tensor reshape", "[tensor][reshape]") {
+    nrt::Tensor t({2, 3});
+    t(0, 0) = 1.0;
+    t(0, 1) = 2.0;
+    t(0, 2) = 3.0;
+    t(1, 0) = 4.0;
+    t(1, 1) = 5.0;
+    t(1, 2) = 6.0;
+
+    SECTION("reshape to a different 2D shape preserves row-major order") {
+        nrt::Tensor r = t.reshape({3, 2});
+        REQUIRE(r.shape() == std::vector<size_t>{3, 2});
+        REQUIRE(r(0, 0) == 1.0);
+        REQUIRE(r(0, 1) == 2.0);
+        REQUIRE(r(1, 0) == 3.0);
+        REQUIRE(r(1, 1) == 4.0);
+        REQUIRE(r(2, 0) == 5.0);
+        REQUIRE(r(2, 1) == 6.0);
+    }
+
+    SECTION("reshape to 1D flattens in row-major order") {
+        nrt::Tensor r = t.reshape({6});
+        REQUIRE(r.rank() == 1);
+        for (size_t i = 0; i < 6; ++i) {
+            REQUIRE(r(i) == static_cast<double>(i + 1));
+        }
+    }
+
+    SECTION("reshape to rank-3 shape") {
+        nrt::Tensor r = t.reshape({2, 3, 1});
+        REQUIRE(r.shape() == std::vector<size_t>{2, 3, 1});
+        REQUIRE(r(0, 0, 0) == 1.0);
+        REQUIRE(r(1, 2, 0) == 6.0);
+    }
+
+    SECTION("reshape to the same shape leaves values unchanged") {
+        nrt::Tensor r = t.reshape({2, 3});
+        REQUIRE(r.shape() == t.shape());
+        REQUIRE(r(0, 0) == 1.0);
+        REQUIRE(r(1, 2) == 6.0);
+    }
+
+    SECTION("mismatched element count throws") {
+        REQUIRE_THROWS_AS(t.reshape({4, 2}), std::invalid_argument);
+    }
+
+    SECTION("result is an independent copy, not a view") {
+        nrt::Tensor r = t.reshape({3, 2});
+
+        r(0, 0) = 99.0;
+        REQUIRE(t(0, 0) == 1.0);  // mutating r must not affect t
+
+        t(0, 1) = -1.0;
+        REQUIRE(r(0, 1) == 2.0);  // mutating t after the fact must not affect r
     }
 }

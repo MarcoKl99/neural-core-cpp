@@ -1,6 +1,7 @@
 // include/nrt/tensor.hpp
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <vector>
@@ -22,15 +23,12 @@ public:
     /*    Operator Overloads    */
     /****************************/
 
-    // Function call operator overload for 1D
-    // Works with a reference to be able to change the value
-    double& operator()(size_t i);
-    double operator()(size_t i) const;
+    // Variadic access operator for Tensors of arbitrary shape
+    template <typename... Args>
+    double& operator()(Args... indices);
 
-    // Function call operator overload for 2D
-    // Works with a reference to be able to change the value
-    double& operator()(size_t i, size_t j);
-    double operator()(size_t i, size_t j) const;
+    template <typename... Args>
+    double operator()(Args... indices) const;
 
     // Utility function: print
     void print(std::size_t precision = 5) const;
@@ -60,6 +58,9 @@ public:
     // Transpose
     Tensor transpose() const;
 
+    // Reshape
+    Tensor reshape(const std::vector<size_t>& new_shape) const;
+
     // Helper function
     double sum() const;
 
@@ -86,11 +87,49 @@ public:
 
 private:
     std::vector<size_t> shape_;
+    std::vector<size_t> strides_;
     std::vector<double> data_;
 
     // Autograd members
     std::vector<double> gradient_data_;   // Stores computed gradients
     std::vector<size_t> gradient_shape_;  // Shape of the gradient vector
+
+    // Private helper
+    void compute_strides();
+    template <typename... Args>
+    size_t flat_offset(Args... indices) const;
 };
+
+// Note: Template method must be defined in the header, therefore it's here and not in the cpp file
+template <typename... Args>
+size_t Tensor::flat_offset(Args... indices) const {
+    if (sizeof...(indices) != rank()) {
+        throw std::invalid_argument("Tensor: number of indices must match rank");
+    }
+
+    // Expand the arguments into a container to iterate over it
+    std::array<size_t, sizeof...(Args)> idx{static_cast<size_t>(indices)...};
+
+    // Calculate the offset that we need to access the correct data
+    size_t offset = 0;
+    for (size_t d = 0; d < idx.size(); ++d) {
+        // Check if the current idx is legal
+        if (idx[d] >= shape_[d]) {
+            throw std::out_of_range("Tensor: index out of range");
+        }
+        offset += idx[d] * strides_[d];
+    }
+    return offset;
+}
+
+template <typename... Args>
+double& Tensor::operator()(Args... indices) {
+    return data_[flat_offset(indices...)];
+}
+
+template <typename... Args>
+double Tensor::operator()(Args... indices) const {
+    return data_[flat_offset(indices...)];
+}
 
 }  // namespace nrt
