@@ -173,6 +173,16 @@ TEST_CASE("Multi-dimensional tensor access", "[tensor][access]") {
             }
         }
     }
+
+    SECTION("Out of range on multi-dimensional tensor throws") {
+        auto t_multi = nrt::Tensor({2, 3, 4, 2, 3, 4});
+        REQUIRE_THROWS_AS(t_multi(2, 0, 0, 0, 0, 0), std::out_of_range);
+    }
+
+    SECTION("Wrong number of indices on multi-dimensional tensor throws") {
+        auto t_multi = nrt::Tensor({2, 3, 4, 2, 3, 4});
+        REQUIRE_THROWS_AS(t_multi(1, 2, 1, 0, 0), std::invalid_argument);  // 5 args, not 6
+    }
 }
 
 // Mathematical Operations
@@ -785,5 +795,19 @@ TEST_CASE("Tensor reshape", "[tensor][reshape]") {
 
         t(0, 1) = -1.0;
         REQUIRE(r(0, 1) == 2.0);  // mutating t after the fact must not affect r
+    }
+}
+
+TEST_CASE("Tensor print", "[tensor][print]") {
+    SECTION("Print does not throw") {
+        nrt::Tensor t1({3});
+        nrt::Tensor t2({2, 2});
+        nrt::Tensor t3({2, 3, 4});
+        nrt::Tensor t4({4, 4, 4, 4, 4});
+
+        REQUIRE_NOTHROW(t1.print());
+        REQUIRE_NOTHROW(t2.print());
+        REQUIRE_NOTHROW(t3.print());
+        REQUIRE_NOTHROW(t4.print());
     }
 }
