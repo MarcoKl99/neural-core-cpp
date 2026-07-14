@@ -406,7 +406,7 @@ TEST_CASE("Broadcasting Addition in-place", "[tensor][addition]") {
 }
 
 // Subtraction
-TEST_CASE("Tensor 2D subtraction", "[tensor][addition]") {
+TEST_CASE("Tensor 2D subtraction", "[tensor][subtraction]") {
     nrt::Tensor t1({2, 2});
     nrt::Tensor t2({2, 2});
 
@@ -438,17 +438,9 @@ TEST_CASE("Tensor 2D subtraction", "[tensor][addition]") {
         REQUIRE(t2(1, 0) == 4.0);
         REQUIRE(t2(1, 1) == 4.0);
     }
-
-    SECTION("Tensors must be same shape") {
-        nrt::Tensor t_other_shape({2, 3});
-        REQUIRE_THROWS_AS(t1 - t_other_shape, std::invalid_argument);
-
-        nrt::Tensor t_other_rank({2});
-        REQUIRE_THROWS_AS(t1 - t_other_rank, std::invalid_argument);
-    }
 }
 
-TEST_CASE("Tensor 1D subtraction", "[tensor][addition]") {
+TEST_CASE("Tensor 1D subtraction", "[tensor][subtraction]") {
     nrt::Tensor t1({3});
     nrt::Tensor t2({3});
 
@@ -476,13 +468,52 @@ TEST_CASE("Tensor 1D subtraction", "[tensor][addition]") {
         REQUIRE(t2(1) == 3.0);
         REQUIRE(t2(2) == 3.0);
     }
+}
 
-    SECTION("Tensors must be same shape") {
-        nrt::Tensor t_other_shape({4});
-        REQUIRE_THROWS_AS(t1 - t_other_shape, std::invalid_argument);
+TEST_CASE("Broadcasting Subtraction", "[tensor][subtraction]") {
+    SECTION("operator- broadcasts {2,2} - {2,1}") {
+        nrt::Tensor t1({2, 2});
+        t1(0, 0) = 11.0;
+        t1(0, 1) = 12.0;
+        t1(1, 0) = 23.0;
+        t1(1, 1) = 24.0;
 
-        nrt::Tensor t_other_rank({3, 3});
-        REQUIRE_THROWS_AS(t1 - t_other_rank, std::invalid_argument);
+        nrt::Tensor t2({2, 1});
+        t2(0, 0) = 10.0;
+        t2(1, 0) = 20.0;
+
+        nrt::Tensor result = t1 - t2;
+        REQUIRE(result.shape() == std::vector<size_t>{2, 2});
+        REQUIRE(result(0, 0) == 1.0);  // 11 - 10
+        REQUIRE(result(0, 1) == 2.0);  // 12 - 10
+        REQUIRE(result(1, 0) == 3.0);  // 23 - 20
+        REQUIRE(result(1, 1) == 4.0);  // 24 - 20
+    }
+}
+
+TEST_CASE("Broadcasting Subtraction in-place", "[tensor][subtraction]") {
+    SECTION("operator-= subtracts in-place with broadcasting") {
+        nrt::Tensor t1({2, 2});
+        t1(0, 0) = 11.0;
+        t1(0, 1) = 12.0;
+        t1(1, 0) = 23.0;
+        t1(1, 1) = 24.0;
+
+        nrt::Tensor t2({2, 1});
+        t2(0, 0) = 10.0;
+        t2(1, 0) = 20.0;
+
+        t1 -= t2;
+        REQUIRE(t1(0, 0) == 1.0);
+        REQUIRE(t1(0, 1) == 2.0);
+        REQUIRE(t1(1, 0) == 3.0);
+        REQUIRE(t1(1, 1) == 4.0);
+    }
+
+    SECTION("operator-= throws if result shape doesn't match left operand") {
+        nrt::Tensor t1({2, 1});
+        nrt::Tensor t2({2, 2});
+        REQUIRE_THROWS_AS(t1 -= t2, std::invalid_argument);
     }
 }
 
@@ -583,16 +614,6 @@ TEST_CASE("Tensor 2D hadamard product", "[tensor][hadamard]") {
         REQUIRE(t1(0, 0) == 1.0);
         REQUIRE(t2(0, 0) == 5.0);
     }
-
-    SECTION("Tensors must be same shape") {
-        nrt::Tensor t_other_shape({2, 3});
-        REQUIRE_THROWS_AS(t1.hadamard(t_other_shape), std::invalid_argument);
-    }
-
-    SECTION("Tensors must be same rank") {
-        nrt::Tensor t_other_rank({2});
-        REQUIRE_THROWS_AS(t1.hadamard(t_other_rank), std::invalid_argument);
-    }
 }
 
 TEST_CASE("Tensor 1D hadamard product", "[tensor][hadamard]") {
@@ -612,15 +633,33 @@ TEST_CASE("Tensor 1D hadamard product", "[tensor][hadamard]") {
         REQUIRE(t3(1) == 10.0);
         REQUIRE(t3(2) == 18.0);
     }
+}
 
-    SECTION("Tensors must be same shape") {
-        nrt::Tensor t_other_shape({4});
-        REQUIRE_THROWS_AS(t1.hadamard(t_other_shape), std::invalid_argument);
+TEST_CASE("Broadcasting hadamard", "[tensor][hadamard]") {
+    SECTION("hadamard broadcasts {2,2} * {2,1}") {
+        nrt::Tensor t1({2, 2});
+        t1(0, 0) = 2.0;
+        t1(0, 1) = 3.0;
+        t1(1, 0) = 4.0;
+        t1(1, 1) = 5.0;
+
+        nrt::Tensor t2({2, 1});
+        t2(0, 0) = 10.0;
+        t2(1, 0) = 20.0;
+
+        // t2 broadcasts [[10, 10], [20, 20]]
+        nrt::Tensor result = t1.hadamard(t2);
+        REQUIRE(result.shape() == std::vector<size_t>{2, 2});
+        REQUIRE(result(0, 0) == 20.0);   // 2 * 10
+        REQUIRE(result(0, 1) == 30.0);   // 3 * 10
+        REQUIRE(result(1, 0) == 80.0);   // 4 * 20
+        REQUIRE(result(1, 1) == 100.0);  // 5 * 20
     }
 
-    SECTION("Tensors must be same rank") {
-        nrt::Tensor t_other_rank({3, 3});
-        REQUIRE_THROWS_AS(t1.hadamard(t_other_rank), std::invalid_argument);
+    SECTION("hadamard throws on incompatible broadcast shapes") {
+        nrt::Tensor t1({3, 2});
+        nrt::Tensor t2({2, 3});
+        REQUIRE_THROWS_AS(t1.hadamard(t2), std::invalid_argument);
     }
 }
 

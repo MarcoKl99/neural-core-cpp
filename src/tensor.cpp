@@ -143,29 +143,70 @@ Tensor Tensor::operator+(const Tensor& other) const {
 }
 
 Tensor& Tensor::operator-=(const Tensor& other) {
-    // The shapes must be identical
-    if (shape_ != other.shape_) {
-        throw std::invalid_argument("Tensor::operator+=: shape mismatch");
+    // Compute what the broadcast shape would be
+    std::vector<size_t> broadcast_shape = broadcast_shapes(shape_, other.shape_);
+
+    // For in-place operations, the broadcast result must match our current shape
+    if (broadcast_shape != shape_) {
+        throw std::invalid_argument(
+            "Tensor::operator-=: broadcast result shape does not match left operand");
     }
 
-    // Perform the subtraction
-    for (size_t i = 0; i < data_.size(); ++i) {
-        data_[i] -= other.data_[i];
+    // Compute broadcast strides for other
+    std::vector<size_t> other_strides = broadcast_strides(other.shape_, other.strides_, shape_);
+
+    // Subtract in-place
+    for (size_t i = 0; i < size(); ++i) {
+        // Convert flat index to coords
+        std::vector<size_t> coords(shape_.size());
+        size_t idx = i;
+        for (int d = shape_.size() - 1; d >= 0; --d) {
+            coords[d] = idx % shape_[d];
+            idx /= shape_[d];
+        }
+
+        // Compute offset in other using broadcast strides
+        size_t other_offset = 0;
+        for (size_t d = 0; d < shape_.size(); ++d) {
+            other_offset += coords[d] * other_strides[d];
+        }
+
+        data_[i] -= other.data_[other_offset];
     }
 
     return *this;
 }
 
 Tensor Tensor::operator-(const Tensor& other) const {
-    // Delegate the logic to the operator-= and re-use it here
+    // Compute broadcasted shape
+    std::vector<size_t> result_shape = broadcast_shapes(shape_, other.shape_);
+    Tensor result(result_shape);
 
-    // Copy the Tensor
-    Tensor result = *this;
+    // Compute broadcasted strides for both operands
+    std::vector<size_t> this_strides = broadcast_strides(shape_, strides_, result_shape);
+    std::vector<size_t> other_strides =
+        broadcast_strides(other.shape_, other.strides_, result_shape);
 
-    // Add the other tensor using the operator-=
-    result -= other;
+    // Fill result by looping through all flat indices
+    for (size_t i = 0; i < result.size(); ++i) {
+        // Convert flat index to multi-dimensional coordinates
+        std::vector<size_t> coords(result_shape.size());
+        size_t idx = i;
+        for (int d = result_shape.size() - 1; d >= 0; --d) {
+            coords[d] = idx % result_shape[d];
+            idx /= result_shape[d];
+        }
 
-    // Return the new created object
+        // Compute offsets in this and other using broadcast strides
+        size_t this_offset = 0, other_offset = 0;
+        for (size_t d = 0; d < result_shape.size(); ++d) {
+            this_offset += coords[d] * this_strides[d];
+            other_offset += coords[d] * other_strides[d];
+        }
+
+        result.data_[i] = data_[this_offset] - other.data_[other_offset];
+    }
+
     return result;
 }
 
@@ -183,15 +224,33 @@ Tensor Tensor::operator*(double scalar) const {
 }
 
 Tensor Tensor::hadamard(const Tensor& other) const {
-    // The shapes must be equal here
-    if (shape_ != other.shape_) {
-        throw std::invalid_argument("Tensor::hadamard: shape mismatch");
-    }
+    // Compute broadcasted shape
+    std::vector<size_t> result_shape = broadcast_shapes(shape_, other.shape_);
+    Tensor result(result_shape);
 
-    // Create a new Tensor instance - no in-place method required for now
-    Tensor result = *this;
-    for (size_t i = 0; i < data_.size(); ++i) {
-        result.data_[i] *= other.data_[i];
+    // Compute broadcasted strides for both operands
+    std::vector<size_t> this_strides = broadcast_strides(shape_, strides_, result_shape);
+    std::vector<size_t> other_strides =
+        broadcast_strides(other.shape_, other.strides_, result_shape);
+
+    // Fill result by looping through all flat indices
+    for (size_t i = 0; i < result.size(); ++i) {
+        // Convert flat index to multi-dimensional coordinates
+        std::vector<size_t> coords(result_shape.size());
+        size_t idx = i;
+        for (int d = result_shape.size() - 1; d >= 0; --d) {
+            coords[d] = idx % result_shape[d];
+            idx /= result_shape[d];
+        }
+
+        // Compute offsets in this and other using broadcast strides
+        size_t this_offset = 0, other_offset = 0;
+        for (size_t d = 0; d < result_shape.size(); ++d) {
+            this_offset += coords[d] * this_strides[d];
+            other_offset += coords[d] * other_strides[d];
+        }
+
+        result.data_[i] = data_[this_offset] * other.data_[other_offset];
     }
 
     return result;
