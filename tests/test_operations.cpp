@@ -645,3 +645,57 @@ TEST_CASE("Subtract Autodiff with Broadcasting - Forward and Backward", "[operat
         REQUIRE(grad_b(1, 1) == -1.0);
     }
 }
+
+TEST_CASE("Transpose Autodiff - Forward and Backward", "[operations][transpose]") {
+    auto a = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+    (*a)(0, 0) = 1.0;
+    (*a)(0, 1) = 2.0;
+    (*a)(0, 2) = 3.0;
+    (*a)(1, 0) = 4.0;
+    (*a)(1, 1) = 5.0;
+    (*a)(1, 2) = 6.0;
+    // a = [[1, 2, 3], [4, 5, 6]]
+
+    SECTION("Forward pass transposes correctly") {
+        auto b = nrt::transpose_autodiff(a);
+
+        REQUIRE(b->shape() == std::vector<size_t>{3, 2});
+        REQUIRE((*b)(0, 0) == 1.0);
+        REQUIRE((*b)(0, 1) == 4.0);
+        REQUIRE((*b)(1, 0) == 2.0);
+        REQUIRE((*b)(1, 1) == 5.0);
+        REQUIRE((*b)(2, 0) == 3.0);
+        REQUIRE((*b)(2, 1) == 6.0);
+    }
+
+    SECTION("Backward pass transposes gradient back") {
+        auto b = nrt::transpose_autodiff(a);
+        b->backward();
+
+        // Gradient of b should be {3, 2} (all 1s from backward())
+        // Gradient of a should be transposed back to {2, 3}
+        nrt::Tensor grad_a = a->gradient();
+
+        REQUIRE(grad_a.shape() == std::vector<size_t>{2, 3});
+        REQUIRE(grad_a(0, 0) == 1.0);
+        REQUIRE(grad_a(0, 1) == 1.0);
+        REQUIRE(grad_a(0, 2) == 1.0);
+        REQUIRE(grad_a(1, 0) == 1.0);
+        REQUIRE(grad_a(1, 1) == 1.0);
+        REQUIRE(grad_a(1, 2) == 1.0);
+    }
+
+    SECTION("Transpose is invertible (double transpose)") {
+        auto b = nrt::transpose_autodiff(a);
+        auto c = nrt::transpose_autodiff(b);
+
+        // c should equal a
+        REQUIRE(c->shape() == std::vector<size_t>{2, 3});
+        REQUIRE((*c)(0, 0) == 1.0);
+        REQUIRE((*c)(0, 1) == 2.0);
+        REQUIRE((*c)(0, 2) == 3.0);
+        REQUIRE((*c)(1, 0) == 4.0);
+        REQUIRE((*c)(1, 1) == 5.0);
+        REQUIRE((*c)(1, 2) == 6.0);
+    }
+}

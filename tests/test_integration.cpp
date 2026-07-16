@@ -53,8 +53,14 @@ TEST_CASE("Integration - gradient check (backward matches finite differences)",
     nrt::Sigmoid act;
     nrt::MSELoss loss_fn;
 
-    auto x = col({0.5, -1.0, 2.0});
-    auto target = col({1.0, 0.0});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 3});
+    (*x)(0, 0) = 0.5;
+    (*x)(0, 1) = -1.0;
+    (*x)(0, 2) = 2.0;
+
+    auto target = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
+    (*target)(0, 0) = 1.0;
+    (*target)(0, 1) = 0.0;
 
     // ---- analytic gradient via backward ----
     layer.weights().zero_grad();
@@ -85,7 +91,7 @@ TEST_CASE("Integration - gradient check (backward matches finite differences)",
             double lp = loss_now();
             layer.weights()(i, j) = orig - eps;
             double lm = loss_now();
-            layer.weights()(i, j) = orig;  // restore
+            layer.weights()(i, j) = orig;
             double numeric = (lp - lm) / (2.0 * eps);
             REQUIRE(approx_equal(grad_w(i, j), numeric, 1e-5));
         }
@@ -192,35 +198,50 @@ TEST_CASE("Integration - full MLP trains on XOR (Sequential + activations)", "[i
     b2(0, 0) = 0.0;
     l2->set_weights(w2, b2);
 
+    // Create batch tensors: {batch=4, features}
+    auto xs_batch = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 2});
+    (*xs_batch)(0, 0) = 0.0;
+    (*xs_batch)(0, 1) = 0.0;  // XOR(0,0) = 0
+    (*xs_batch)(1, 0) = 0.0;
+    (*xs_batch)(1, 1) = 1.0;  // XOR(0,1) = 1
+    (*xs_batch)(2, 0) = 1.0;
+    (*xs_batch)(2, 1) = 0.0;  // XOR(1,0) = 1
+    (*xs_batch)(3, 0) = 1.0;
+    (*xs_batch)(3, 1) = 1.0;  // XOR(1,1) = 0
+
+    auto ys_batch = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 1});
+    (*ys_batch)(0, 0) = 0.0;
+    (*ys_batch)(1, 0) = 1.0;
+    (*ys_batch)(2, 0) = 1.0;
+    (*ys_batch)(3, 0) = 0.0;
+
     nrt::MSELoss loss_fn;
-    std::vector<std::shared_ptr<nrt::Tensor>> xs = {col({0.0, 0.0}), col({0.0, 1.0}),
-                                                    col({1.0, 0.0}), col({1.0, 1.0})};
-    std::vector<std::shared_ptr<nrt::Tensor>> ys = {col({0.0}), col({1.0}), col({1.0}), col({0.0})};
 
     auto avg_loss = [&]() {
-        double s = 0.0;
-        for (size_t i = 0; i < xs.size(); ++i) s += nrt::mse(*model.forward(xs[i]), *ys[i]);
-        return s / static_cast<double>(xs.size());
+        auto pred = model.forward(xs_batch);
+        auto l = loss_fn.forward(pred, ys_batch);
+        return (*l)(0, 0);  // Already averaged over batch
     };
 
     double initial = avg_loss();
 
     auto params = model.parameters();
     double learning_rate = 0.1;
-    nrt::SGD opt(params, learning_rate / static_cast<double>(xs.size()));
+    nrt::SGD opt(params, learning_rate);
 
     for (int epoch = 0; epoch < 5000; ++epoch) {
         opt.zero_grad();
-        for (size_t i = 0; i < xs.size(); ++i) {
-            auto pred = model.forward(xs[i]);
-            auto l = loss_fn.forward(pred, ys[i]);
-            l->backward();
-        }
+
+        // Single forward/backward pass on the entire batch
+        auto pred = model.forward(xs_batch);
+        auto l = loss_fn.forward(pred, ys_batch);
+        l->backward();
+
         opt.step();
     }
 
     double final = avg_loss();
-    REQUIRE(final < initial * 0.5);  // meaningfully reduced
+    REQUIRE(final < initial * 0.5);  // Meaningfully reduced
 }
 
 // =============================================================================
@@ -235,9 +256,22 @@ TEST_CASE("Integration - full MLP trains on XOR (Sequential + activations)", "[i
 TEST_CASE("Integration - deeper MLP (He/Xavier init) trains reliably on XOR",
           "[integration][xor][deep]") {
     // Data
-    std::vector<std::shared_ptr<nrt::Tensor>> xs = {col({0.0, 0.0}), col({0.0, 1.0}),
-                                                    col({1.0, 0.0}), col({1.0, 1.0})};
-    std::vector<std::shared_ptr<nrt::Tensor>> ys = {col({0.0}), col({1.0}), col({1.0}), col({0.0})};
+    // Create batch tensors: {batch=4, features}
+    auto xs_batch = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 2});
+    (*xs_batch)(0, 0) = 0.0;
+    (*xs_batch)(0, 1) = 0.0;  // XOR(0,0) = 0
+    (*xs_batch)(1, 0) = 0.0;
+    (*xs_batch)(1, 1) = 1.0;  // XOR(0,1) = 1
+    (*xs_batch)(2, 0) = 1.0;
+    (*xs_batch)(2, 1) = 0.0;  // XOR(1,0) = 1
+    (*xs_batch)(3, 0) = 1.0;
+    (*xs_batch)(3, 1) = 1.0;  // XOR(1,1) = 0
+
+    auto ys_batch = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 1});
+    (*ys_batch)(0, 0) = 0.0;
+    (*ys_batch)(1, 0) = 1.0;
+    (*ys_batch)(2, 0) = 1.0;
+    (*ys_batch)(3, 0) = 0.0;
 
     // Model
     std::vector<std::unique_ptr<nrt::Module>> modules;
@@ -249,25 +283,23 @@ TEST_CASE("Integration - deeper MLP (He/Xavier init) trains reliably on XOR",
     modules.push_back(std::make_unique<nrt::Sigmoid>());
     auto model = nrt::Sequential(std::move(modules));
 
-    // Helper function for loss calculation
+    // Helper function for batched loss calculation
+    nrt::MSELoss loss_fn;
     auto avg_loss = [&](nrt::Sequential& model) {
-        double s = 0.0;
-        for (size_t i = 0; i < xs.size(); ++i) s += nrt::mse(*model.forward(xs[i]), *ys[i]);
-        return s / static_cast<double>(xs.size());
+        auto pred = model.forward(xs_batch);
+        auto l = loss_fn.forward(pred, ys_batch);
+        return (*l)(0, 0);  // Already averaged over batch
     };
 
     // Training
-    nrt::MSELoss loss_fn;
     auto params = model.parameters();
-    nrt::SGD opt(params, 0.1 / static_cast<double>(xs.size()));
+    nrt::SGD opt(params, 0.1);
 
     for (int epoch = 0; epoch < 5000; ++epoch) {
         opt.zero_grad();
-        for (size_t i = 0; i < xs.size(); ++i) {
-            auto pred = model.forward(xs[i]);
-            auto l = loss_fn.forward(pred, ys[i]);
-            l->backward();
-        }
+        auto pred = model.forward(xs_batch);
+        auto l = loss_fn.forward(pred, ys_batch);
+        l->backward();
         opt.step();
     }
 
@@ -307,20 +339,26 @@ TEST_CASE("Integration - CrossEntropyLoss gradient check (backward matches finit
 
     nrt::CrossEntropyLoss loss_fn;
 
-    const size_t target = 2;
-    auto x = col({0.5, -1.0, 2.0});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<size_t>{1, 3});
+    (*x)(0, 0) = 0.5;
+    (*x)(0, 1) = -1.0;
+    (*x)(0, 2) = 2.0;
+
+    auto target_tensor = std::make_shared<nrt::Tensor>(std::vector<size_t>{1, 1});
+    (*target_tensor)(0, 0) = 2.0;
 
     layer.weights().zero_grad();
     layer.bias().zero_grad();
     auto logits = layer.forward(x);
-    auto l = loss_fn.forward(logits, target);
+    auto l = loss_fn.forward(logits, target_tensor);
     l->backward();
     nrt::Tensor grad_w = layer.weights().gradient();
     nrt::Tensor grad_b = layer.bias().gradient();
 
     auto loss_now = [&]() {
         auto zz = layer.forward(x);
-        return nrt::cross_entropy(*zz, target);
+        auto loss = loss_fn.forward(zz, target_tensor);
+        return (*loss)(0, 0);
     };
     const double eps = 1e-6;
 

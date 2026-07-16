@@ -13,18 +13,13 @@
 /*
 Manual MLP training on the XOR problem: (0,0)->0, (0,1)->1, (1,0)->1, (1,1)->0.
 Architecture: Linear -> ReLU -> Linear -> Sigmoid -> MSE.
-Full-batch gradient descent: forward + backward accumulate gradients across all 4 samples,
-then weights/biases are updated manually (no Optimizer class yet, see roadmap v0.2).
-
-Note: depending on random weight initialization, this can occasionally get stuck due to the
-"Dying ReLU" problem - see notes/dying_relu_observation.md for details.
+Now uses batched training: single forward/backward pass for all 4 samples per epoch.
 */
 
 namespace {
 
 // Print the initial weights for the comparison to PyTorch
 void print_weights(nrt::Linear& layer1, nrt::Linear& layer2) {
-    // Print initial weights for reference validation
     std::cout << "=== INITIAL WEIGHTS (for reference validation) ===\n";
 
     std::cout << "\n// Layer 1 weights (4x2)\n";
@@ -95,29 +90,11 @@ void set_reference_weights(nrt::Linear& layer1, nrt::Linear& layer2) {
     layer2.set_weights(w2, b2);
 }
 
-std::shared_ptr<nrt::Tensor> make_input(double a, double b) {
-    auto x = std::make_shared<nrt::Tensor>(std::vector<size_t>{2, 1});
-    (*x)(0, 0) = a;
-    (*x)(1, 0) = b;
-    return x;
-}
-std::shared_ptr<nrt::Tensor> make_target(double t) {
-    auto y = std::make_shared<nrt::Tensor>(std::vector<size_t>{1, 1});
-    (*y)(0, 0) = t;
-    return y;
-}
-
-double evaluate_average_loss(nrt::Sequential& model,
-                             std::vector<std::shared_ptr<nrt::Tensor>>& inputs,
-                             const std::vector<std::shared_ptr<nrt::Tensor>>& targets) {
-    double total_loss = 0.0;
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto y_hat = model.forward(inputs[i]);  // shared_ptr
-        total_loss += nrt::mse(*y_hat, *targets[i]);
-    }
-
-    return total_loss / static_cast<double>(inputs.size());
+double evaluate_average_loss(nrt::Sequential& model, const std::shared_ptr<nrt::Tensor>& inputs,
+                             const std::shared_ptr<nrt::Tensor>& targets) {
+    auto y_hat = model.forward(inputs);
+    auto loss = nrt::mse(*y_hat, *targets);
+    return loss;
 }
 
 }  // namespace
@@ -139,17 +116,27 @@ int main() {
 
     // Define all 4 possible training samples
     // (0, 0) = 0, (0, 1) = 1, (1, 0) = 1, (1, 1) = 0
-    std::vector<std::shared_ptr<nrt::Tensor>> inputs = {make_input(0.0, 0.0), make_input(0.0, 1.0),
-                                                        make_input(1.0, 0.0), make_input(1.0, 1.0)};
-    std::vector<std::shared_ptr<nrt::Tensor>> targets = {make_target(0.0), make_target(1.0),
-                                                         make_target(1.0), make_target(0.0)};
+    auto inputs = std::make_shared<nrt::Tensor>(std::vector<size_t>{4, 2});
+    (*inputs)(0, 0) = 0.0;
+    (*inputs)(0, 1) = 0.0;  // (0, 0)
+    (*inputs)(1, 0) = 0.0;
+    (*inputs)(1, 1) = 1.0;  // (0, 1)
+    (*inputs)(2, 0) = 1.0;
+    (*inputs)(2, 1) = 0.0;  // (1, 0)
+    (*inputs)(3, 0) = 1.0;
+    (*inputs)(3, 1) = 1.0;  // (1, 1)
+
+    auto targets = std::make_shared<nrt::Tensor>(std::vector<size_t>{4, 1});
+    (*targets)(0, 0) = 0.0;
+    (*targets)(1, 0) = 1.0;
+    (*targets)(2, 0) = 1.0;
+    (*targets)(3, 0) = 0.0;
 
     // Define the training parameters
     const int epochs = 5000;
     const double learning_rate = 0.1;
-    const size_t batch_size = inputs.size();
     nrt::MSELoss loss_fn;
-    nrt::SGD optimizer(model.parameters(), learning_rate / batch_size);
+    nrt::SGD optimizer(model.parameters(), learning_rate);
 
     double loss_before = evaluate_average_loss(model, inputs, targets);
     std::cout << "Average loss BEFORE update: " << loss_before << '\n';
@@ -157,11 +144,10 @@ int main() {
     for (int epoch = 0; epoch < epochs; ++epoch) {
         optimizer.zero_grad();
 
-        for (size_t j = 0; j < inputs.size(); ++j) {
-            auto y_hat = model.forward(inputs[j]);  // builds the graph
-            auto loss = loss_fn.forward(y_hat, targets[j]);
-            loss->backward();  // accumulates into every param
-        }
+        // Single batched forward/backward
+        auto y_hat = model.forward(inputs);
+        auto loss = loss_fn.forward(y_hat, targets);
+        loss->backward();
 
         optimizer.step();
 

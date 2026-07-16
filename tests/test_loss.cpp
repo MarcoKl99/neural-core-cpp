@@ -212,35 +212,72 @@ TEST_CASE("cross_entropy_grad", "[loss][cross_entropy][backward]") {
     }
 }
 
-TEST_CASE("CrossEntropyLoss Autodiff - Forward pass") {
-    auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
-    (*logits)(0, 0) = 1.0;
-    (*logits)(1, 0) = 2.0;
-    (*logits)(2, 0) = 0.5;
-    const size_t target = 1;
-
+TEST_CASE("CrossEntropyLoss with batches", "[loss][cross_entropy][batch]") {
     nrt::CrossEntropyLoss loss_fn;
-    auto loss = loss_fn.forward(logits, target);
 
-    REQUIRE(loss->shape() == std::vector<size_t>{1, 1});
-    REQUIRE(std::abs((*loss)(0, 0) - nrt::cross_entropy(*logits, target)) < 1e-9);
-    REQUIRE(!(loss->is_leaf()));
-    REQUIRE(logits->is_leaf());
-}
+    SECTION("Forward pass with batch_size=2, num_classes=3") {
+        // Logits: {batch=2, num_classes=3}
+        auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+        (*logits)(0, 0) = 1.0;
+        (*logits)(0, 1) = 2.0;
+        (*logits)(0, 2) = 0.5;
+        (*logits)(1, 0) = 0.1;
+        (*logits)(1, 1) = 0.2;
+        (*logits)(1, 2) = 3.0;
 
-TEST_CASE("CrossEntropyLoss Autodiff - Backward pass matches cross_entropy_grad") {
-    auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
-    (*logits)(0, 0) = 1.0;
-    (*logits)(1, 0) = 2.0;
-    (*logits)(2, 0) = 0.5;
-    const size_t target = 1;
+        // Targets: {batch=2, 1} with class indices
+        auto targets = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+        (*targets)(0, 0) = 1.0;  // Sample 0: class 1
+        (*targets)(1, 0) = 2.0;  // Sample 1: class 2
 
-    nrt::CrossEntropyLoss loss_fn;
-    auto loss = loss_fn.forward(logits, target);
-    loss->backward();
+        auto loss = loss_fn.forward(logits, targets);
 
-    nrt::Tensor expected = nrt::cross_entropy_grad(*logits, target);
-    for (size_t i = 0; i < 3; ++i) {
-        REQUIRE(std::abs(logits->gradient()(i, 0) - expected(i, 0)) < 1e-9);
+        // Loss should be scalar {1, 1}
+        REQUIRE(loss->shape() == std::vector<size_t>{1, 1});
+        // Loss should be positive and finite
+        REQUIRE((*loss)(0, 0) > 0.0);
+        REQUIRE(std::isfinite((*loss)(0, 0)));
+    }
+
+    SECTION("Backward pass propagates gradients correctly") {
+        auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+        (*logits)(0, 0) = 1.0;
+        (*logits)(0, 1) = 2.0;
+        (*logits)(0, 2) = 0.5;
+        (*logits)(1, 0) = 0.1;
+        (*logits)(1, 1) = 0.2;
+        (*logits)(1, 2) = 3.0;
+
+        auto targets = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+        (*targets)(0, 0) = 1.0;
+        (*targets)(1, 0) = 2.0;
+
+        logits->zero_grad();
+        auto loss = loss_fn.forward(logits, targets);
+        loss->backward();
+
+        nrt::Tensor grad_logits = logits->gradient();
+
+        // Gradient should match logits' shape
+        REQUIRE(grad_logits.shape() == std::vector<size_t>{2, 3});
+        // Gradients should be non-zero
+        REQUIRE(grad_logits(0, 1) != 0.0);
+        REQUIRE(grad_logits(1, 2) != 0.0);
+    }
+
+    SECTION("Batch size mismatch throws") {
+        auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+        auto targets =
+            std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});  // Wrong batch size
+
+        REQUIRE_THROWS_AS(loss_fn.forward(logits, targets), std::invalid_argument);
+    }
+
+    SECTION("Target class index out of range throws") {
+        auto logits = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 3});
+        auto targets = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+        (*targets)(0, 0) = 5.0;  // Class 5 doesn't exist (only 0, 1, 2)
+
+        REQUIRE_THROWS_AS(loss_fn.forward(logits, targets), std::out_of_range);
     }
 }

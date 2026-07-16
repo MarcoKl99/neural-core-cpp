@@ -44,11 +44,18 @@ void Linear::set_weights(const Tensor& w, const Tensor& b) {
 }
 
 std::shared_ptr<Tensor> Linear::forward(std::shared_ptr<Tensor> x) {
-    if (x->shape() != std::vector<size_t>{in_features_, 1}) {
-        throw std::invalid_argument("Linear::forward: input shape mismatch");
+    if (x->rank() != 2 || x->shape()[1] != in_features_) {
+        throw std::invalid_argument("Linear::forward: input shape must be {batch, in_features}");
     }
-    auto z = matmul_autodiff(weights_, x);  // passes the shared param straight in
-    auto y = add_autodiff(z, bias_);
+
+    // Forward: y = x @ W.T + b
+    auto w_t = transpose_autodiff(weights_);  // Use autodiff transpose!
+    auto z = matmul_autodiff(x, w_t);         // {batch, out_features}
+
+    // Reshape bias from {out_features, 1} to {1, out_features}
+    auto bias_reshaped = reshape_autodiff(bias_, {1, out_features_});
+    auto y = add_autodiff(z, bias_reshaped);
+
     return y;
 }
 

@@ -37,15 +37,15 @@ TEST_CASE("Sequential forward chains modules in order", "[sequential][forward]")
     modules.push_back(std::move(layer2));
     nrt::Sequential model(std::move(modules));
 
-    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
     (*x)(0, 0) = 3.0;
-    (*x)(1, 0) = 5.0;
+    (*x)(0, 1) = 5.0;
 
     // y1 = x + 1 = [4, 6]; y2 = 2 * y1 = [8, 12]
     auto y = model.forward(x);
-    REQUIRE(y->shape() == std::vector<size_t>{2, 1});
+    REQUIRE(y->shape() == std::vector<size_t>{1, 2});
     REQUIRE((*y)(0, 0) == 8.0);
-    REQUIRE((*y)(1, 0) == 12.0);
+    REQUIRE((*y)(0, 1) == 12.0);
 }
 
 TEST_CASE("Sequential parameters aggregates all modules' parameters in order",
@@ -114,14 +114,14 @@ TEST_CASE("Sequential add appends a module to the sequence", "[sequential][add]"
 
     model.add(std::move(layer));
 
-    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
     (*x)(0, 0) = 3.0;
-    (*x)(1, 0) = 5.0;
+    (*x)(0, 1) = 5.0;
 
     // Identity weights, zero bias -> output should equal input.
     auto y = model.forward(x);
     REQUIRE((*y)(0, 0) == 3.0);
-    REQUIRE((*y)(1, 0) == 5.0);
+    REQUIRE((*y)(0, 1) == 5.0);
     REQUIRE(model.parameters().size() == 2);
 }
 

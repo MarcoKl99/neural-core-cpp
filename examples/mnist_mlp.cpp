@@ -18,15 +18,12 @@
 #include "nrt/tensor.hpp"
 
 /*
-MNIST with a raw MLP: Linear(784,256,He) -> ReLU -> Linear(256,128,He) -> ReLU ->
-Linear(128,10,Xavier) -> CrossEntropyLoss, trained with mini-batch SGD.
+ MNIST with a raw MLP: Linear(784,256,He) -> ReLU -> Linear(256,128,He) -> ReLU ->
+ Linear(128,10,Xavier) -> CrossEntropyLoss, trained with mini-batch SGD.
 
-Runs on a SUBSET of the full 60k/10k MNIST split by default (kTrainSubsetSize /
-kTestSubsetSize below) - Tensor::matmul is a plain unvectorized triple loop with
-no batch dimension, so a full-dataset run is genuinely slow. Once this converges
-on the subset, dial the sizes up (they clamp to the dataset's real size, so a
-large value like 60000 safely means "all of it").
-*/
+ Now uses batched forward/backward: each mini-batch is a single {batch_size, 784}
+ tensor instead of looping over individual samples.
+ */
 
 namespace {
 
@@ -61,6 +58,25 @@ mnist::Dataset take_subset(mnist::Dataset dataset, size_t size, unsigned int see
     return subset;
 }
 
+// Build a batch tensor from dataset images and labels
+std::pair<std::shared_ptr<nrt::Tensor>, std::shared_ptr<nrt::Tensor>> build_batch(
+    const mnist::Dataset& dataset, const std::vector<size_t>& batch_indices) {
+    size_t batch_size = batch_indices.size();
+    auto images = std::make_shared<nrt::Tensor>(std::vector<size_t>{batch_size, 784});
+    auto labels = std::make_shared<nrt::Tensor>(std::vector<size_t>{batch_size, 1});
+
+    for (size_t i = 0; i < batch_size; ++i) {
+        size_t idx = batch_indices[i];
+        // Copy image pixels
+        for (size_t p = 0; p < 784; ++p) {
+            (*images)(i, p) = (*dataset.images[idx])(p, 0);
+        }
+        // Copy label
+        (*labels)(i, 0) = static_cast<double>(dataset.labels[idx]);
+    }
+    return {images, labels};
+}
+
 size_t argmax(const nrt::Tensor& logits) {
     size_t best = 0;
     for (size_t i = 1; i < logits.shape()[0]; ++i) {
@@ -70,22 +86,33 @@ size_t argmax(const nrt::Tensor& logits) {
 }
 
 double evaluate_accuracy(nrt::Sequential& model, const mnist::Dataset& dataset) {
+    // Build batch from all samples
+    std::vector<size_t> all_indices(dataset.images.size());
+    std::iota(all_indices.begin(), all_indices.end(), 0);
+    auto [images_batch, _] = build_batch(dataset, all_indices);
+    auto logits_batch = model.forward(images_batch);
+
     size_t correct = 0;
     for (size_t i = 0; i < dataset.images.size(); ++i) {
-        auto logits = model.forward(dataset.images[i]);
-        if (argmax(*logits) == dataset.labels[i]) ++correct;
+        size_t best = 0;
+        for (size_t c = 1; c < 10; ++c) {
+            if ((*logits_batch)(i, c) > (*logits_batch)(i, best)) best = c;
+        }
+        if (best == dataset.labels[i]) ++correct;
     }
     return static_cast<double>(correct) / static_cast<double>(dataset.images.size());
 }
 
 double evaluate_average_loss(nrt::Sequential& model, nrt::CrossEntropyLoss& loss_fn,
                              const mnist::Dataset& dataset) {
-    double total_loss = 0.0;
-    for (size_t i = 0; i < dataset.images.size(); ++i) {
-        auto logits = model.forward(dataset.images[i]);
-        total_loss += nrt::cross_entropy(*logits, dataset.labels[i]);
-    }
-    return total_loss / static_cast<double>(dataset.images.size());
+    // Build batch from all samples
+    std::vector<size_t> all_indices(dataset.images.size());
+    std::iota(all_indices.begin(), all_indices.end(), 0);
+    auto [images_batch, labels_batch] = build_batch(dataset, all_indices);
+    auto logits = model.forward(images_batch);
+    auto loss = loss_fn.forward(logits, labels_batch);
+
+    return (*loss)(0, 0);  // Already averaged over batch
 }
 
 void print_progress_bar(size_t current, size_t total, int epoch, int total_epochs,
@@ -122,13 +149,20 @@ void print_digit_ascii(const nrt::Tensor& image) {
 void print_predictions(nrt::Sequential& model, const mnist::Dataset& dataset,
                        const std::vector<size_t>& sample_indices, const std::string& header) {
     std::cout << "\n=== " << header << " ===\n";
-    for (size_t idx : sample_indices) {
-        auto logits = model.forward(dataset.images[idx]);
-        size_t predicted = argmax(*logits);
+
+    auto [images_batch, _] = build_batch(dataset, sample_indices);
+    auto logits = model.forward(images_batch);
+
+    for (size_t i = 0; i < sample_indices.size(); ++i) {
+        size_t idx = sample_indices[i];
+        size_t best = 0;
+        for (size_t c = 1; c < 10; ++c) {
+            if ((*logits)(i, c) > (*logits)(i, best)) best = c;
+        }
 
         std::cout << "\nSample " << idx << " - true label: " << dataset.labels[idx]
-                  << ", predicted: " << predicted
-                  << (predicted == dataset.labels[idx] ? "  (correct)" : "  (WRONG)") << "\n\n";
+                  << ", predicted: " << best
+                  << (best == dataset.labels[idx] ? "  (correct)" : "  (WRONG)") << "\n\n";
         print_digit_ascii(*dataset.images[idx]);
     }
 }
@@ -144,7 +178,7 @@ int main(int argc, char** argv) {
         test_subset_size = parse_size_arg(argc, argv, 2, kDefaultTestSubsetSize);
         epochs = parse_size_arg(argc, argv, 3, kDefaultEpochs);
     } catch (const std::exception&) {
-        std::cerr << "Usage: " << argv[0] << " [train_subset_size] [test_subset_size] [epochs]\n";
+        std::cerr << "Usage: " << argv[0] << " [train_subset_size] [test_subset_size][epochs]\n ";
         return 1;
     }
 
@@ -195,15 +229,19 @@ int main(int argc, char** argv) {
         auto epoch_start = std::chrono::steady_clock::now();
 
         for (size_t batch_start = 0; batch_start < indices.size(); batch_start += kBatchSize) {
-            size_t batch_end = std::min(batch_start + kBatchSize, indices.size());
-
-            optimizer.zero_grad();
-            for (size_t i = batch_start; i < batch_end; ++i) {
-                size_t idx = indices[i];
-                auto logits = model.forward(train_data.images[idx]);
-                auto loss = loss_fn.forward(logits, train_data.labels[idx]);
-                loss->backward();
+            // Build batch from shuffled indices
+            std::vector<size_t> batch_indices;
+            for (size_t i = batch_start; i < std::min(batch_start + kBatchSize, indices.size());
+                 ++i) {
+                batch_indices.push_back(indices[i]);
             }
+            auto [images_batch, labels_batch] = build_batch(train_data, batch_indices);
+
+            // Single forward/backward for entire batch
+            optimizer.zero_grad();
+            auto logits = model.forward(images_batch);
+            auto loss = loss_fn.forward(logits, labels_batch);
+            loss->backward();
             optimizer.step();
 
             ++batch_num;

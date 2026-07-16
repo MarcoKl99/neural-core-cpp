@@ -129,9 +129,9 @@ TEST_CASE("SGD Optimizer - Different learning rates") {
 
 TEST_CASE("SGD Optimizer - Integration with Linear") {
     nrt::Linear layer(2, 3);
-    auto input = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    auto input = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
     (*input)(0, 0) = 0.5;
-    (*input)(1, 0) = 0.5;
+    (*input)(0, 1) = 0.5;
 
     auto params = layer.parameters();
     const auto lr = 0.01;
