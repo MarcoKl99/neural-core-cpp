@@ -15,73 +15,91 @@ Toy 3-class classification: three well-separated 2D clusters, classified via
 Sequential(Linear(2,8,He) -> ReLU -> Linear(8,3,Xavier)) feeding raw logits into
 CrossEntropyLoss (softmax applied internally - see include/nrt/loss.hpp).
 
-This is the step between XOR and MNIST: the first genuinely multi-class (not
-binary) problem, and the first end-to-end use of Softmax + CrossEntropyLoss.
+Demonstrates:
+- Batched training (all 12 samples in one forward/backward)
+- Multi-class classification with CrossEntropyLoss
+- Softmax + negative log-likelihood fused in the loss
 */
 
 namespace {
 
-std::shared_ptr<nrt::Tensor> make_input(double x0, double x1) {
-    auto x = std::make_shared<nrt::Tensor>(std::vector<size_t>{2, 1});
-    (*x)(0, 0) = x0;
-    (*x)(1, 0) = x1;
-    return x;
-}
-
-// Predicted class = index of the largest logit (softmax is monotonic, so this
-// is equivalent to picking the largest probability without computing it).
-size_t argmax(const nrt::Tensor& logits) {
+// Predicted class = index of the largest logit (softmax is monotonic)
+size_t argmax(const nrt::Tensor& logits_row) {
+    // logits_row is shape {1, num_classes}, extract first (and only) sample
     size_t best = 0;
-    for (size_t i = 1; i < logits.shape()[0]; ++i) {
-        if (logits(i, 0) > logits(best, 0)) best = i;
+    for (size_t i = 1; i < logits_row.shape()[1]; ++i) {
+        if (logits_row(0, i) > logits_row(0, best)) best = i;
     }
     return best;
 }
 
-double evaluate_accuracy(nrt::Sequential& model,
-                         const std::vector<std::shared_ptr<nrt::Tensor>>& inputs,
-                         const std::vector<size_t>& targets) {
+double evaluate_accuracy(nrt::Sequential& model, const std::shared_ptr<nrt::Tensor>& inputs,
+                         const std::shared_ptr<nrt::Tensor>& targets) {
+    auto logits = model.forward(inputs);  // {batch, num_classes}
+
     size_t correct = 0;
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto logits = model.forward(inputs[i]);
-        if (argmax(*logits) == targets[i]) ++correct;
+    for (size_t i = 0; i < inputs->shape()[0]; ++i) {
+        // Find argmax for sample i
+        size_t best = 0;
+        for (size_t c = 1; c < logits->shape()[1]; ++c) {
+            if ((*logits)(i, c) > (*logits)(i, best)) best = c;
+        }
+        size_t true_class = static_cast<size_t>((*targets)(i, 0));
+        if (best == true_class) ++correct;
     }
-    return static_cast<double>(correct) / static_cast<double>(inputs.size());
+    return static_cast<double>(correct) / static_cast<double>(inputs->shape()[0]);
 }
 
 double evaluate_average_loss(nrt::Sequential& model, nrt::CrossEntropyLoss& loss_fn,
-                             const std::vector<std::shared_ptr<nrt::Tensor>>& inputs,
-                             const std::vector<size_t>& targets) {
-    double total_loss = 0.0;
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto logits = model.forward(inputs[i]);
-        total_loss += nrt::cross_entropy(*logits, targets[i]);
-    }
-    return total_loss / static_cast<double>(inputs.size());
+                             const std::shared_ptr<nrt::Tensor>& inputs,
+                             const std::shared_ptr<nrt::Tensor>& targets) {
+    auto logits = model.forward(inputs);           // {batch, num_classes}
+    auto loss = loss_fn.forward(logits, targets);  // targets {batch, 1}
+    return (*loss)(0, 0);                          // Scalar loss, already averaged over batch
 }
 
 }  // namespace
 
 int main() {
-    // Three well-separated clusters in 2D, 4 points each.
-    std::vector<std::shared_ptr<nrt::Tensor>> inputs = {
-        // Class 0, centered near (-2, -2)
-        make_input(-2.0, -2.0),
-        make_input(-2.5, -1.5),
-        make_input(-1.5, -2.5),
-        make_input(-2.0, -1.0),
-        // Class 1, centered near (2, -2)
-        make_input(2.0, -2.0),
-        make_input(2.5, -1.5),
-        make_input(1.5, -2.5),
-        make_input(2.0, -1.0),
-        // Class 2, centered near (0, 2)
-        make_input(0.0, 2.0),
-        make_input(0.5, 2.5),
-        make_input(-0.5, 2.5),
-        make_input(0.0, 1.0),
-    };
-    std::vector<size_t> targets = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2};
+    // Three well-separated clusters in 2D, 4 points each
+    // Create batch tensor: {12, 2}
+    auto inputs = std::make_shared<nrt::Tensor>(std::vector<size_t>{12, 2});
+
+    // Class 0, centered near (-2, -2)
+    (*inputs)(0, 0) = -2.0;
+    (*inputs)(0, 1) = -2.0;
+    (*inputs)(1, 0) = -2.5;
+    (*inputs)(1, 1) = -1.5;
+    (*inputs)(2, 0) = -1.5;
+    (*inputs)(2, 1) = -2.5;
+    (*inputs)(3, 0) = -2.0;
+    (*inputs)(3, 1) = -1.0;
+
+    // Class 1, centered near (2, -2)
+    (*inputs)(4, 0) = 2.0;
+    (*inputs)(4, 1) = -2.0;
+    (*inputs)(5, 0) = 2.5;
+    (*inputs)(5, 1) = -1.5;
+    (*inputs)(6, 0) = 1.5;
+    (*inputs)(6, 1) = -2.5;
+    (*inputs)(7, 0) = 2.0;
+    (*inputs)(7, 1) = -1.0;
+
+    // Class 2, centered near (0, 2)
+    (*inputs)(8, 0) = 0.0;
+    (*inputs)(8, 1) = 2.0;
+    (*inputs)(9, 0) = 0.5;
+    (*inputs)(9, 1) = 2.5;
+    (*inputs)(10, 0) = -0.5;
+    (*inputs)(10, 1) = 2.5;
+    (*inputs)(11, 0) = 0.0;
+    (*inputs)(11, 1) = 1.0;
+
+    // Target classes: {12, 1}
+    auto targets = std::make_shared<nrt::Tensor>(std::vector<size_t>{12, 1});
+    for (size_t i = 0; i < 4; ++i) (*targets)(i, 0) = 0.0;   // Class 0
+    for (size_t i = 4; i < 8; ++i) (*targets)(i, 0) = 1.0;   // Class 1
+    for (size_t i = 8; i < 12; ++i) (*targets)(i, 0) = 2.0;  // Class 2
 
     // Model: 2 -> 8 (ReLU, He) -> 3 (raw logits, Xavier). No final activation -
     // CrossEntropyLoss consumes logits directly and applies softmax internally.
@@ -92,10 +110,9 @@ int main() {
     nrt::Sequential model(std::move(modules));
 
     nrt::CrossEntropyLoss loss_fn;
-    const int epochs = 2000;
-    const double learning_rate = 0.1;
-    const size_t batch_size = inputs.size();
-    nrt::SGD optimizer(model.parameters(), learning_rate / batch_size);
+    const int epochs = 200;
+    const double learning_rate = 0.01;
+    nrt::SGD optimizer(model.parameters(), learning_rate);
 
     std::cout << "Initial loss:     " << evaluate_average_loss(model, loss_fn, inputs, targets)
               << '\n';
@@ -103,14 +120,15 @@ int main() {
 
     for (int epoch = 0; epoch < epochs; ++epoch) {
         optimizer.zero_grad();
-        for (size_t i = 0; i < inputs.size(); ++i) {
-            auto logits = model.forward(inputs[i]);
-            auto loss = loss_fn.forward(logits, targets[i]);
-            loss->backward();
-        }
+
+        // Single batched forward/backward
+        auto logits = model.forward(inputs);
+        auto loss = loss_fn.forward(logits, targets);
+        loss->backward();
+
         optimizer.step();
 
-        if ((epoch % 200) == 0) {
+        if ((epoch % 10) == 0) {
             std::cout << "Epoch " << epoch << "/" << epochs
                       << " - loss: " << evaluate_average_loss(model, loss_fn, inputs, targets)
                       << " - accuracy: " << evaluate_accuracy(model, inputs, targets) << '\n';

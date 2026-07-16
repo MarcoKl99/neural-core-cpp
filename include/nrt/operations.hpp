@@ -13,4 +13,6 @@ std::shared_ptr<Tensor> subtract_autodiff(std::shared_ptr<Tensor> a, std::shared
 std::shared_ptr<Tensor> scalar_mult_autodiff(std::shared_ptr<Tensor> a, double scalar);
 std::shared_ptr<Tensor> reshape_autodiff(std::shared_ptr<Tensor> a,
                                          const std::vector<size_t>& new_shape);
+std::shared_ptr<Tensor> transpose_autodiff(std::shared_ptr<Tensor> a);
+
 }  // namespace nrt

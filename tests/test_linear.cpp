@@ -74,7 +74,6 @@ TEST_CASE("Linear set_weights", "[linear][set_weights]") {
 TEST_CASE("Linear forward", "[linear][forward]") {
     nrt::Linear layer(3, 2);
 
-    // W = [[1, 2, 3], [4, 5, 6]], b = [1, 1]
     nrt::Tensor w({2, 3});
     w(0, 0) = 1.0;
     w(0, 1) = 2.0;
@@ -89,31 +88,30 @@ TEST_CASE("Linear forward", "[linear][forward]") {
 
     layer.set_weights(w, b);
 
-    // x = [1, 1, 1]^T
-    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3, 1});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 3});
     (*x)(0, 0) = 1.0;
-    (*x)(1, 0) = 1.0;
-    (*x)(2, 0) = 1.0;
+    (*x)(0, 1) = 1.0;
+    (*x)(0, 2) = 1.0;
 
     SECTION("Output has correct shape") {
         auto y = layer.forward(x);
-        REQUIRE(y->shape() == std::vector<size_t>{2, 1});
+        REQUIRE(y->shape() == std::vector<size_t>{1, 2});
     }
 
-    SECTION("Output is correctly computed (W*x + b)") {
-        // y[0] = 1*1 + 2*1 + 3*1 + 1 = 7
-        // y[1] = 4*1 + 5*1 + 6*1 + 1 = 16
+    SECTION("Output is correctly computed (x @ W.T + b)") {
+        // x @ W.T = [[1,1,1]] @ [[1,4],[2,5],[3,6]] = [[6, 15]]
+        // + bias transposed [[1,1]] = [[7, 16]]
         auto y = layer.forward(x);
         REQUIRE((*y)(0, 0) == 7.0);
-        REQUIRE((*y)(1, 0) == 16.0);
+        REQUIRE((*y)(0, 1) == 16.0);
     }
 
-    SECTION("Wrong input shape throws") {
-        auto wrong_x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 1});
+    SECTION("Wrong input feature dimension throws") {
+        auto wrong_x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 4});
         REQUIRE_THROWS_AS(layer.forward(wrong_x), std::invalid_argument);
     }
 
-    SECTION("1D input throws (must be {in_features, 1})") {
+    SECTION("1D input throws") {
         auto wrong_x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{3});
         REQUIRE_THROWS_AS(layer.forward(wrong_x), std::invalid_argument);
     }
@@ -136,9 +134,9 @@ TEST_CASE("Linear forward creates computation nodes") {
     layer.set_weights(w, b);
 
     // Input
-    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
     (*x)(0, 0) = 1.0;
-    (*x)(1, 0) = 2.0;
+    (*x)(0, 1) = 2.0;
 
     // Forward pass
     auto output = layer.forward(x);
@@ -165,9 +163,9 @@ TEST_CASE("Linear forward backward propagates gradients") {
     layer.set_weights(w, b);
 
     // Input
-    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
+    auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 2});
     (*x)(0, 0) = 1.0;
-    (*x)(1, 0) = 2.0;
+    (*x)(0, 1) = 2.0;
 
     // Forward pass
     auto output = layer.forward(x);

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 
 #include "nrt/activations.hpp"
 #include "nrt/linear.hpp"
@@ -10,59 +11,42 @@ int main() {
     nrt::Linear layer1(2, 4);
     nrt::Linear layer2(4, 1);
 
-    // XOR-Table: Inputs and expected targets
-    std::vector<std::shared_ptr<nrt::Tensor>> inputs;
-    std::vector<std::shared_ptr<nrt::Tensor>> targets;
+    // XOR table: {4, 2} batch of inputs
+    auto inputs = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 2});
+    (*inputs)(0, 0) = 0.0;
+    (*inputs)(0, 1) = 0.0;  // XOR(0, 0) = 0
+    (*inputs)(1, 0) = 0.0;
+    (*inputs)(1, 1) = 1.0;  // XOR(0, 1) = 1
+    (*inputs)(2, 0) = 1.0;
+    (*inputs)(2, 1) = 0.0;  // XOR(1, 0) = 1
+    (*inputs)(3, 0) = 1.0;
+    (*inputs)(3, 1) = 1.0;  // XOR(1, 1) = 0
 
-    // Lambda function to create an input Tensor (e.g. {0, 1})
-    auto make_input = [](double a, double b) {
-        auto x = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{2, 1});
-        (*x)(0, 0) = a;
-        (*x)(1, 0) = b;
-        return x;
-    };
+    // Expected outputs: {4, 1} batch of targets
+    auto targets = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{4, 1});
+    (*targets)(0, 0) = 0.0;
+    (*targets)(1, 0) = 1.0;
+    (*targets)(2, 0) = 1.0;
+    (*targets)(3, 0) = 0.0;
 
-    // Lambda function to create an output tensor (e.g. {1})
-    auto make_target = [](double t) {
-        auto y = std::make_shared<nrt::Tensor>(std::vector<std::size_t>{1, 1});
-        (*y)(0, 0) = t;
-        return y;
-    };
-
-    // Fill the inputs
-    inputs.push_back(make_input(0.0, 0.0));
-    inputs.push_back(make_input(0.0, 1.0));
-    inputs.push_back(make_input(1.0, 0.0));
-    inputs.push_back(make_input(1.0, 1.0));
-
-    // Fill the outputs / labels
-    targets.push_back(make_target(0.0));
-    targets.push_back(make_target(1.0));
-    targets.push_back(make_target(1.0));
-    targets.push_back(make_target(0.0));
-
-    double total_loss = 0.0;
-
-    // Create the ReLU and Sigmoid activation functions
     auto relu = nrt::ReLU{};
     auto sigmoid = nrt::Sigmoid{};
     auto criterion = nrt::MSELoss{};
 
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto x = inputs[i];
-        auto target = targets[i];
+    // Single batched forward pass
+    auto hidden = relu.forward(layer1.forward(inputs));
+    auto output = sigmoid.forward(layer2.forward(hidden));
 
-        // Forward Pass
-        auto hidden = relu.forward(layer1.forward(x));
-        auto output = sigmoid.forward(layer2.forward(hidden));
+    auto loss = criterion.forward(output, targets);
+    double avg_loss = (*loss)(0, 0);  // MSE already averaged over batch
 
-        auto loss = criterion.forward(output, target);
-        total_loss += (*loss)(0, 0);
-
-        std::cout << "Loss: " << (*loss)(0, 0) << '\n';
+    std::cout << "Sample losses: ";
+    for (size_t i = 0; i < 4; ++i) {
+        std::cout << (*output)(i, 0) << " ";
     }
+    std::cout << "\nAverage loss: " << avg_loss << '\n';
 
-    std::cout << "Average loss: " << total_loss / inputs.size() << '\n';
+    return 0;
 
     return 0;
 }

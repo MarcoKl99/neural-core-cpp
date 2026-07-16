@@ -26,7 +26,9 @@ Tensor cross_entropy_grad(const Tensor& logits,
 
 class CrossEntropyLoss {
 public:
-    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> y_hat, size_t target);
+    // Batch version: logits {batch, num_classes}, targets {batch, 1} with class indices
+    std::shared_ptr<Tensor> forward(std::shared_ptr<Tensor> logits,
+                                    std::shared_ptr<Tensor> targets);
 };
 
 }  // namespace nrt

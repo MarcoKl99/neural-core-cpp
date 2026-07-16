@@ -141,4 +141,26 @@ std::shared_ptr<Tensor> reshape_autodiff(std::shared_ptr<Tensor> a,
     return result;
 }
 
+std::shared_ptr<Tensor> transpose_autodiff(std::shared_ptr<Tensor> a) {
+    // Forward: transpose the tensor
+    auto result = std::make_shared<Tensor>(a->transpose());
+
+    // Attach computation node for backward
+    result->creator_node_ =
+        ComputationNode{.inputs = {a},
+                        .backward_fn = [](Tensor& output, const Tensor& grad_output,
+                                          const std::vector<std::shared_ptr<Tensor>>& inputs) {
+                            auto& a = inputs[0];
+
+                            // Transpose is its own inverse: transposing the gradient back gives us
+                            // grad_a
+                            Tensor grad_a = grad_output.transpose();
+
+                            a->accumulate_gradient(grad_a);
+                            if (a->creator_node_) a->backward_impl(grad_a);
+                        }};
+
+    return result;
+}
+
 }  // namespace nrt
