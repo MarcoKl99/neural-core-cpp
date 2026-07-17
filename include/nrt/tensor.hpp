@@ -27,6 +27,12 @@ public:
     const std::vector<size_t>& shape() const;
     size_t size() const;  // Total number of elements in the tensor
 
+    // Access element by vector of indices (works for any rank)
+    double at(const std::vector<size_t>& indices) const;
+
+    // Set element by vector of indices (works for any rank)
+    void set_at(const std::vector<size_t>& indices, double value);
+
     /****************************/
     /*    Operator Overloads    */
     /****************************/

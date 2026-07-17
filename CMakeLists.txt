@@ -88,6 +88,12 @@ add_executable(mnist_mlp
 )
 target_link_libraries(mnist_mlp PRIVATE nrt::core)
 
+add_executable(mnist_conv
+    examples/mnist_conv.cpp
+    examples/mnist_loader.cpp
+)
+target_link_libraries(mnist_conv PRIVATE nrt::core)
+
 
 # Optional local scratch file (gitignore)
 if(EXISTS ${CMAKE_SOURCE_DIR}/dev.cpp)

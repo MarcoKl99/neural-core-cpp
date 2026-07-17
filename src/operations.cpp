@@ -308,7 +308,6 @@ std::shared_ptr<Tensor> conv2d_autodiff(std::shared_ptr<Tensor> input,
         std::make_shared<Tensor>(std::vector<size_t>{batch, out_channels, out_height, out_width});
 
     // Convolution computation
-    std::cout << "Before the beast" << '\n';
     for (size_t b = 0; b < batch; ++b) {
         for (size_t oc = 0; oc < out_channels; ++oc) {
             for (size_t h_out = 0; h_out < out_height; ++h_out) {
@@ -331,7 +330,6 @@ std::shared_ptr<Tensor> conv2d_autodiff(std::shared_ptr<Tensor> input,
             }
         }
     }
-    std::cout << "After the beast" << '\n';
 
     // Create backward function
     auto backward_fn = [input, weights, bias, kernel_size, batch, in_channels](

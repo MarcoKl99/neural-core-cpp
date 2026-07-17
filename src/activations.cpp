@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <functional>
+#include <iostream>
 #include <memory>
 
 #include "nrt/parameter.hpp"
@@ -12,18 +13,21 @@ namespace {
 
 // Apply the function fn to every element of the passed Tensor (regardless of its rank)
 Tensor apply_elementwise(const Tensor& x, const std::function<double(double)>& fn) {
+    const auto& shape = x.shape();
     Tensor result(x.shape());
+    size_t rank = shape.size();
 
-    if (x.rank() == 1) {
-        for (size_t i = 0; i < x.shape()[0]; ++i) {
-            result(i) = fn(x(i));
+    for (size_t flat_idx = 0; flat_idx < x.size(); ++flat_idx) {
+        // Convert flat index to coords
+        std::vector<size_t> indices(rank);
+        size_t idx = flat_idx;
+        for (int d = rank - 1; d >= 0; --d) {
+            indices[d] = idx % shape[d];
+            idx /= shape[d];
         }
-    } else {
-        for (size_t i = 0; i < x.shape()[0]; ++i) {
-            for (size_t j = 0; j < x.shape()[1]; ++j) {
-                result(i, j) = fn(x(i, j));
-            }
-        }
+
+        // Access and apply function using generic methods
+        result.set_at(indices, fn(x.at(indices)));
     }
 
     return result;

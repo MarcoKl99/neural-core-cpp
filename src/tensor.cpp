@@ -578,4 +578,29 @@ Tensor Tensor::unbroadcast_gradient(const Tensor& grad, const std::vector<size_t
     return summed.reshape(original_shape);
 }
 
+double Tensor::at(const std::vector<size_t>& indices) const {
+    if (indices.size() != rank()) {
+        throw std::invalid_argument("Tensor::at: index count mismatch");
+    }
+
+    // Compute flat offset using strides (same as variadic operator does internally)
+    size_t offset = 0;
+    for (size_t d = 0; d < indices.size(); ++d) {
+        offset += indices[d] * strides_[d];
+    }
+    return data_[offset];
+}
+
+void Tensor::set_at(const std::vector<size_t>& indices, double value) {
+    if (indices.size() != rank()) {
+        throw std::invalid_argument("Tensor::set_at: index count mismatch");
+    }
+
+    size_t offset = 0;
+    for (size_t d = 0; d < indices.size(); ++d) {
+        offset += indices[d] * strides_[d];
+    }
+    data_[offset] = value;
+}
+
 }  // namespace nrt
