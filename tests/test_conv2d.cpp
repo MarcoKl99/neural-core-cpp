@@ -31,8 +31,7 @@ TEST_CASE("Conv2D forward with concrete 2x2 kernel on 4x4 input", "[conv2d][forw
     nrt::Tensor b({1, 1});
     b(0, 0) = 0.0;
 
-    conv.weights() = w;
-    conv.bias() = b;
+    conv.set_weights(w, b);
 
     // Create input {1, 1, 4, 4}
     // 1  2  3  4
@@ -132,4 +131,70 @@ TEST_CASE("Conv2D forward with concrete 2x2 kernel on 4x4 input - 2 output chann
     REQUIRE((*output)(0, 1, 2, 0) == 46.0);
     REQUIRE((*output)(0, 1, 2, 1) == 50.0);
     REQUIRE((*output)(0, 1, 2, 2) == 54.0);
+}
+
+TEST_CASE("Conv2D gradient flow (backward pass)", "[conv2d][backward]") {
+    // Create simple conv: 1 in, 1 out, 2x2 kernel
+    nrt::Conv2D conv(1, 1, 2);
+
+    // Set weights: identity kernel
+    nrt::Tensor w({1, 1, 2, 2});
+    w(0, 0, 0, 0) = 1.0;
+    w(0, 0, 0, 1) = 0.0;
+    w(0, 0, 1, 0) = 0.0;
+    w(0, 0, 1, 1) = 1.0;
+
+    nrt::Tensor b({1, 1});
+    b(0, 0) = 0.0;
+
+    conv.set_weights(w, b);
+
+    // Create input {1, 1, 4, 4}
+    // 1  2  3  4
+    // 5  6  7  8
+    // 9  10 11 12
+    // 13 14 15 16
+    auto input = std::make_shared<nrt::Tensor>(std::vector<size_t>{1, 1, 4, 4});
+    for (size_t i = 0; i < 4; ++i) {
+        for (size_t j = 0; j < 4; ++j) {
+            (*input)(0, 0, i, j) = static_cast<double>(i * 4 + j + 1);
+        }
+    }
+
+    // Forward pass
+    auto output = conv.forward(input);
+
+    // Create gradient tensor {1, 1, 3, 3} with all ones
+    nrt::Tensor grad_output({1, 1, 3, 3});
+    for (size_t i = 0; i < 3; ++i) {
+        for (size_t j = 0; j < 3; ++j) {
+            grad_output(0, 0, i, j) = 1.0;
+        }
+    }
+
+    // Backward pass
+    output->backward_impl(grad_output);
+
+    // Verify bias gradient: should be sum of all grad_output values = 9.0
+    auto grad_bias = conv.bias().gradient();
+    REQUIRE(grad_bias.shape() == std::vector<size_t>{1, 1});
+    REQUIRE(grad_bias(0, 0) == 9.0);
+
+    // Verify weights gradient
+    auto grad_weights = conv.weights().gradient();
+    REQUIRE(grad_weights.shape() == std::vector<size_t>{1, 1, 2, 2});
+    // Note that all positions would be multiplied with the incoming gradient positions here,
+    // but all are 1.0 in this simple example
+    // grad_weights(0, 0, 0, 0) = sum of top-left 3x3 patch = 1+2+3+5+6+7+9+10+11 = 54.0
+    REQUIRE(grad_weights(0, 0, 0, 0) == 54.0);
+    // grad_weights(0, 0, 1, 1) = sum of bottom-right 3x3 patch = 6+7+8+10+11+12+14+15+16 = 99.0
+    REQUIRE(grad_weights(0, 0, 1, 1) == 99.0);
+
+    // Verify input gradient
+    auto grad_input = input->gradient();
+    REQUIRE(grad_input.shape() == std::vector<size_t>{1, 1, 4, 4});
+    // grad_input(0, 0, 1, 1) receives from outputs at (0,0) and (1,1)
+    // = grad_output(0,0,0,0)*weights(0,0,1,1) + grad_output(0,0,1,1)*weights(0,0,0,0)
+    // = 1.0*1.0 + 1.0*1.0 = 2.0
+    REQUIRE(grad_input(0, 0, 1, 1) == 2.0);
 }
