@@ -403,7 +403,6 @@ std::shared_ptr<Tensor> maxpool2d_autodiff(std::shared_ptr<Tensor> input) {
         std::make_shared<Tensor>(std::vector<size_t>{batch, channels, out_height, out_width});
 
     // Compute output and store max positions
-    std::cout << "Before forward loop in maxpool2d_autodiff..." << '\n';
     for (size_t b = 0; b < batch; ++b) {
         for (size_t c = 0; c < channels; ++c) {
             for (size_t h_pool = 0; h_pool < out_height; ++h_pool) {
@@ -423,19 +422,9 @@ std::shared_ptr<Tensor> maxpool2d_autodiff(std::shared_ptr<Tensor> input) {
     auto backward_fn = [batch, channels, out_height, out_width](
                            const Tensor& output, const Tensor& grad_output,
                            const std::vector<std::shared_ptr<Tensor>>& inputs) {
-        std::cout << "Backward fn called\n";
-        auto shape = inputs[0]->shape();
-        std::cout << "Got shape: " << shape.size() << " dimensions\n";
-        for (size_t d = 0; d < shape.size(); ++d) {
-            std::cout << "  Dim " << d << ": " << shape[d] << "\n";
-        }
-
-        std::cout << "About to create grad_input...\n";
-        Tensor grad_input(shape);
-        std::cout << "grad_input created!\n";
+        Tensor grad_input(inputs[0]->shape());
 
         // Route gradients: only the max position gets gradient, others get 0
-        std::cout << "Before big loop in the backward_fn in maxpool2d_autpdiff..." << '\n';
         for (size_t b = 0; b < batch; ++b) {
             for (size_t c = 0; c < channels; ++c) {
                 for (size_t h_pool = 0; h_pool < out_height; ++h_pool) {
@@ -459,11 +448,9 @@ std::shared_ptr<Tensor> maxpool2d_autodiff(std::shared_ptr<Tensor> input) {
         }
 
         // Accumulate gradient into input
-        std::cout << "Accumulating gradients..." << '\n';
         inputs[0]->accumulate_gradient(grad_input);
 
         // Recursively backpropagate
-        std::cout << "Calling backward_impl on the inputs..." << '\n';
         inputs[0]->backward_impl(grad_input);
     };
 
