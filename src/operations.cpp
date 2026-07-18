@@ -6,6 +6,33 @@
 #include "nrt/computation_node.hpp"
 #include "nrt/tensor.hpp"
 
+namespace {
+
+// Helper: Find position of max element in 2×2 pool patch
+std::tuple<double, size_t, size_t> find_max_pool_position(const nrt::Tensor& tensor, size_t batch,
+                                                          size_t channel, size_t h_in,
+                                                          size_t w_in) {
+    // TODO: This should not be re-defined here
+    const size_t pool_size = 2;
+
+    double max_val = tensor(batch, channel, h_in, w_in);
+    size_t max_i = 0, max_j = 0;
+
+    for (size_t i = 0; i < pool_size; ++i) {
+        for (size_t j = 0; j < pool_size; ++j) {
+            if (tensor(batch, channel, h_in + i, w_in + j) > max_val) {
+                max_val = tensor(batch, channel, h_in + i, w_in + j);
+                max_i = i;
+                max_j = j;
+            }
+        }
+    }
+
+    return {max_val, max_i, max_j};
+}
+
+}  // namespace
+
 namespace nrt {
 
 std::shared_ptr<Tensor> matmul_autodiff(std::shared_ptr<Tensor> a, std::shared_ptr<Tensor> b) {
@@ -354,6 +381,94 @@ std::shared_ptr<Tensor> conv2d_autodiff(std::shared_ptr<Tensor> input,
     // Attach computation node
     output->creator_node_ =
         ComputationNode{.inputs = {input, weights, bias}, .backward_fn = backward_fn};
+
+    return output;
+}
+
+std::shared_ptr<Tensor> maxpool2d_autodiff(std::shared_ptr<Tensor> input) {
+    const size_t pool_size = 2;
+    const size_t stride = 2;
+
+    // Extract dimensions
+    size_t batch = input->shape()[0];
+    size_t channels = input->shape()[1];
+    size_t height = input->shape()[2];
+    size_t width = input->shape()[3];
+
+    size_t out_height = height / stride;
+    size_t out_width = width / stride;
+
+    // Forward pass: compute output and track max positions
+    auto output =
+        std::make_shared<Tensor>(std::vector<size_t>{batch, channels, out_height, out_width});
+
+    // Compute output and store max positions
+    std::cout << "Before forward loop in maxpool2d_autodiff..." << '\n';
+    for (size_t b = 0; b < batch; ++b) {
+        for (size_t c = 0; c < channels; ++c) {
+            for (size_t h_pool = 0; h_pool < out_height; ++h_pool) {
+                for (size_t w_pool = 0; w_pool < out_width; ++w_pool) {
+                    size_t h_in = h_pool * stride;
+                    size_t w_in = w_pool * stride;
+
+                    auto [max_val, max_i, max_j] = find_max_pool_position(*input, b, c, h_in, w_in);
+
+                    (*output)(b, c, h_pool, w_pool) = max_val;
+                }
+            }
+        }
+    }
+
+    // Create backward function
+    auto backward_fn = [batch, channels, out_height, out_width](
+                           const Tensor& output, const Tensor& grad_output,
+                           const std::vector<std::shared_ptr<Tensor>>& inputs) {
+        std::cout << "Backward fn called\n";
+        auto shape = inputs[0]->shape();
+        std::cout << "Got shape: " << shape.size() << " dimensions\n";
+        for (size_t d = 0; d < shape.size(); ++d) {
+            std::cout << "  Dim " << d << ": " << shape[d] << "\n";
+        }
+
+        std::cout << "About to create grad_input...\n";
+        Tensor grad_input(shape);
+        std::cout << "grad_input created!\n";
+
+        // Route gradients: only the max position gets gradient, others get 0
+        std::cout << "Before big loop in the backward_fn in maxpool2d_autpdiff..." << '\n';
+        for (size_t b = 0; b < batch; ++b) {
+            for (size_t c = 0; c < channels; ++c) {
+                for (size_t h_pool = 0; h_pool < out_height; ++h_pool) {
+                    for (size_t w_pool = 0; w_pool < out_width; ++w_pool) {
+                        size_t h_in = h_pool * stride;
+                        size_t w_in = w_pool * stride;
+
+                        // Note that that is not the most efficient way to do it!
+                        // To future me: Here you can gain performance by storing the positions
+                        // during forward! ;)
+                        // Had reference issues in the first attempt though
+                        auto [max_val, max_i, max_j] =
+                            find_max_pool_position(*inputs[0], b, c, h_in, w_in);
+
+                        // Route gradient to max position only
+                        grad_input(b, c, h_in + max_i, w_in + max_j) =
+                            grad_output(b, c, h_pool, w_pool);
+                    }
+                }
+            }
+        }
+
+        // Accumulate gradient into input
+        std::cout << "Accumulating gradients..." << '\n';
+        inputs[0]->accumulate_gradient(grad_input);
+
+        // Recursively backpropagate
+        std::cout << "Calling backward_impl on the inputs..." << '\n';
+        inputs[0]->backward_impl(grad_input);
+    };
+
+    // Attach computation node
+    output->creator_node_ = ComputationNode{{input}, backward_fn};
 
     return output;
 }

@@ -4,8 +4,11 @@
 #include <vector>
 
 #include "nrt/activations.hpp"
+#include "nrt/conv2d.hpp"
+#include "nrt/flatten.hpp"
 #include "nrt/linear.hpp"
 #include "nrt/loss.hpp"
+#include "nrt/maxpool2d.hpp"
 #include "nrt/optimizer.hpp"
 #include "nrt/sequential.hpp"
 #include "nrt/tensor.hpp"
@@ -384,5 +387,67 @@ TEST_CASE("Integration - CrossEntropyLoss gradient check (backward matches finit
         layer.bias()(i, 0) = orig;
         double numeric = (lp - lm) / (2.0 * eps);
         REQUIRE(approx_equal(grad_b(i, 0), numeric, 1e-5));
+    }
+}
+
+// =============================================================================
+// 6) Full CNN with Conv2D + MaxPool2D + Flatten + Linear + Loss
+// =============================================================================
+TEST_CASE("Integration - Full CNN pipeline (Conv2D + MaxPool2D + Flatten + Linear + Loss)",
+          "[integration][cnn][full_pipeline]") {
+    // Build a small CNN: Conv2D -> ReLU -> MaxPool2D -> Flatten -> Linear
+    std::vector<std::unique_ptr<nrt::Module>> modules;
+    modules.push_back(std::make_unique<nrt::Conv2D>(1, 4, 3));  // 1 -> 4 channels, 3×3 kernel
+    modules.push_back(std::make_unique<nrt::ReLU>());
+    modules.push_back(std::make_unique<nrt::MaxPool2D>());  // 2×2 pooling, stride 2
+    modules.push_back(std::make_unique<nrt::Flatten>());
+    modules.push_back(std::make_unique<nrt::Linear>(4 * 3 * 3, 10));  // 36 → 10 classes
+    nrt::Sequential model(std::move(modules));
+
+    // Create input batch: {2, 1, 8, 8} (2 samples, 1 channel, 8×8 images)
+    auto input = std::make_shared<nrt::Tensor>(std::vector<size_t>{2, 1, 8, 8});
+    for (size_t b = 0; b < 2; ++b) {
+        for (size_t i = 0; i < 8; ++i) {
+            for (size_t j = 0; j < 8; ++j) {
+                (*input)(b, 0, i, j) = static_cast<double>(b * 64 + i * 8 + j) / 100.0;
+            }
+        }
+    }
+
+    // Create labels: {2, 1} (batch of 2 samples with class indices)
+    auto labels = std::make_shared<nrt::Tensor>(std::vector<size_t>{2, 1});
+    (*labels)(0, 0) = 3.0;
+    (*labels)(1, 0) = 7.0;
+
+    auto logits = model.forward(input);
+    REQUIRE(logits->shape() == std::vector<size_t>{2, 10});
+
+    nrt::CrossEntropyLoss loss_fn;
+    auto loss = loss_fn.forward(logits, labels);
+    REQUIRE(loss->shape() == std::vector<size_t>{1, 1});
+    REQUIRE((*loss)(0, 0) > 0.0);
+
+    loss->backward();
+
+    // Check input gradient
+    auto grad_input = input->gradient();
+    REQUIRE(grad_input.shape() == input->shape());
+    double input_grad_sum = 0.0;
+    for (size_t i = 0; i < grad_input.size(); ++i) {
+        std::vector<size_t> indices(grad_input.rank());
+        size_t idx = i;
+        for (int d = grad_input.rank() - 1; d >= 0; --d) {
+            indices[d] = idx % grad_input.shape()[d];
+            idx /= grad_input.shape()[d];
+        }
+        input_grad_sum += std::abs(grad_input.at(indices));
+    }
+    REQUIRE(input_grad_sum > 0.0);
+
+    // Check the shape of the parameters
+    auto params = model.parameters();
+    for (size_t i = 0; i < params.size(); ++i) {
+        auto param_grad = params[i].value->gradient();
+        REQUIRE(param_grad.shape() == params[i].value->shape());
     }
 }

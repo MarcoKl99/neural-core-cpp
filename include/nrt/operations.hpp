@@ -17,5 +17,6 @@ std::shared_ptr<Tensor> transpose_autodiff(std::shared_ptr<Tensor> a);
 std::shared_ptr<Tensor> conv2d_autodiff(std::shared_ptr<Tensor> input,
                                         std::shared_ptr<Tensor> weights,
                                         std::shared_ptr<Tensor> bias, size_t kernel_size);
+std::shared_ptr<Tensor> maxpool2d_autodiff(std::shared_ptr<Tensor> input);
 
 }  // namespace nrt

@@ -338,10 +338,12 @@ void Tensor::backward() {
     if (!creator_node_) return;  // Leaf tensor, nothing to backward
 
     // Initialize gradient: for a scalar loss, gradient is 1.0
+    std::cout << "Initializing gradient..." << '\n';
     gradient_data_ = std::vector<double>(data_.size(), 1.0);
     gradient_shape_ = shape_;
 
     // Start the backward traversal
+    std::cout << "Calling backward_impl..." << '\n';
     backward_impl(gradient());
 }
 
@@ -350,6 +352,7 @@ void Tensor::backward_impl(const Tensor& grad_output) {
 
     // Call the backward function for this operation
     // This will compute gradients for input tensors and recurse on them
+    std::cout << "Calling backward_fn..." << '\n';
     creator_node_->backward_fn(*this, grad_output, creator_node_->inputs);
 }
 
