@@ -8,14 +8,15 @@ A C++20 project on neural networks, implementing the core functionalities of dee
 ## Components 🧱
 
 - Reverse-mode automatic differentiation
-- Tensor library with numerical operations
+- N-dimensional tensor library with row-major strides and broadcasting
+- Convolutional neural networks (Conv2D + MaxPool2D layers)
 - Neural network modules, optimizers and loss functions
 - Gradient checking and PyTorch validation
-- End-to-end MNIST training pipeline
+- End-to-end MNIST training pipeline with batched processing
 
 ## Motivation 🏃‍➡️
 
-The goal of this project is to develop a deeper understanding of the architecture and implementation behind deep learning frameworks.
+The goal of this project is to develop a deeper understanding of the architecture and implementation behind deep learning functionalities.
 
 By implementing every component from scratch in C++, this project explores topics like
 
@@ -24,25 +25,31 @@ By implementing every component from scratch in C++, this project explores topic
 - Numerical stability
 - Architecture
 
-The usage of the functionalities follows (to some extent 😉) the patterns known from e.g. PyTorch as shown in the example below.
+## Example: Convolutional Neural Networks 🏙️
+
+To give an example, we can create convolutional architectures for image classification using just our own implementations!
 
 ```cpp
-// A 2 -> 4 -> 1 MLP, trained with autograd + SGD
-std::vector<std::unique_ptr<nrt::Module>> layers;
-layers.push_back(std::make_unique<nrt::Linear>(2, 4));
-layers.push_back(std::make_unique<nrt::ReLU>());
-layers.push_back(std::make_unique<nrt::Linear>(4, 1));
-layers.push_back(std::make_unique<nrt::Sigmoid>());
-nrt::Sequential model(std::move(layers));
+// A CNN for MNIST: Conv2D -> ReLU -> MaxPool2D -> Flatten -> Dense -> ReLU -> Dense
+std::vector<std::unique_ptr<nrt::Module>> modules;
+modules.push_back(std::make_unique<nrt::Conv2D>(1, 16, 3, nrt::WeightInit::He));
+modules.push_back(std::make_unique<nrt::ReLU>());
+modules.push_back(std::make_unique<nrt::MaxPool2D>());      // 2×2 pooling, stride 2
+modules.push_back(std::make_unique<nrt::Flatten>());
+modules.push_back(std::make_unique<nrt::Linear>(16*13*13, 128, nrt::WeightInit::He));
+modules.push_back(std::make_unique<nrt::ReLU>());
+modules.push_back(std::make_unique<nrt::Linear>(128, 10, nrt::WeightInit::Xavier));
+nrt::Sequential model(std::move(modules));
 
-nrt::MSELoss loss_fn;
-nrt::SGD     optimizer(model.parameters(), /*lr=*/0.05);
+nrt::CrossEntropyLoss loss_fn;
+nrt::SGD              optimizer(model.parameters(), /*lr=*/0.01);
 
+// Batched training (e.g., {32, 1, 28, 28} input)
 optimizer.zero_grad();
-auto y_hat = model.forward(x);            // builds the computation graph
-auto loss  = loss_fn.forward(y_hat, target);
-loss->backward();                         // reverse-mode autograd
-optimizer.step();                         // gradient-descent update
+auto logits = model.forward(images);          // all 32 samples at once
+auto loss   = loss_fn.forward(logits, targets);
+loss->backward();                             // gradients flow through entire CNN
+optimizer.step();
 ```
 
 ---
@@ -50,21 +57,27 @@ optimizer.step();                         // gradient-descent update
 ## Features ✨
 
 **Tensor** (`nrt/tensor.hpp`)
-- 1D / 2D, row-major, double precision, bounds-checked element access
-- Arithmetic: `+`, `-`, `+=`, `-=`, scalar `*`, Hadamard product, `matmul`, `transpose`, `sum`
+- N-dimensional (rank >= 1), row-major storage with stride-based indexing
+- Double precision, bounds-checked variadic element access via `operator()(i, j, k, ...)`
+- Arithmetic: `+`, `-`, `+=`, `-=`, scalar `*`, Hadamard product, `matmul`, `transpose`, `reshape`, `sum`
+- NumPy-style broadcasting with automatic gradient un-broadcasting
 
 **Autograd engine** (`nrt/computation_node.hpp`, `nrt/operations.hpp`)
 - Define-by-run **computational graph** built during the forward pass
 - Reverse-mode automatic differentiation via `Tensor::backward()`
 - Graph edges use shared ownership (`std::shared_ptr`), so intermediate values stay alive for the backward pass
-- Differentiable ops: `matmul_autodiff`, `add_autodiff`, `subtract_autodiff`, `scalar_mult_autodiff`
+- Differentiable ops: `matmul_autodiff`, `add_autodiff`, `subtract_autodiff`, `scalar_mult_autodiff`, `reshape_autodiff`, `transpose_autodiff`, `conv2d_autodiff`, `maxpool2d_autodiff`
+- Broadcasting-aware gradient computation: gradients automatically reduce over broadcasted dimensions
 - Per-tensor gradient storage: `gradient()`, `accumulate_gradient()`, `zero_grad()`
 
 **Modules** (`nrt/module.hpp`)
 - `Module` base class (`forward` / `parameters`), mirroring `torch.nn.Module`
-- `Linear` — affine transform `y = W·x + b` (weights `{out, in}`, bias `{out, 1}`), with **He / Xavier weight initialization** (`WeightInit::He` / `WeightInit::Xavier`) and an optional seed for reproducible init
-- `ReLU`, `Sigmoid`, `Softmax` — activations as graph nodes
-- `Sequential` — chains modules and aggregates their parameters
+- `Linear` — affine transform `y = W·x + b` with **He / Xavier weight initialization** and optional seed for reproducibility
+- `Conv2D` — 2D convolution (fixed 3×3 kernel, stride 1, no padding), with full backward pass
+- `MaxPool2D` — 2×2 max pooling with stride 2, gradient routing only to max positions
+- `Flatten` — reshape N-D tensors to 2D (`{batch, ...}` → `{batch, flattened}`)
+- `ReLU`, `Sigmoid`, `Softmax` — activations as graph nodes, working with any rank tensor
+- `Sequential` — chains modules and aggregates their parameters for batch processing
 
 **Losses** (`nrt/loss.hpp`)
 - `MSELoss` — mean-squared error as a differentiable graph node (`forward(y_hat, target)` → scalar tensor)
@@ -99,7 +112,7 @@ optimizer.step();                         // gradient-descent update
 
 ## Build & run 🛠️
 
-Requires a C++20 compiler and CMake ≥ 3.20. Catch2 is fetched automatically.
+Requires a C++20 compiler and CMake >= 3.20. Catch2 is fetched automatically.
 
 ```bash
 # Configure & build
@@ -114,7 +127,8 @@ cd build && ctest --output-on-failure
 ./build/xor_forward    # forward pass only
 ./build/xor_deep       # deeper XOR MLP (He/Xavier init)
 ./build/three_class    # 3-class classification (Softmax + CrossEntropyLoss)
-./build/mnist_mlp      # 10-class classification on the MNIST dataset of handwritten digits
+./build/mnist_mlp      # MLP baseline on MNIST
+./build/mnist_conv     # CNN (Conv2D + MaxPool2D + Dense) on MNIST — the star of the show! 🌟
 ```
 
 ---
@@ -134,9 +148,19 @@ x ──▶ Linear ──▶ ReLU ──▶ Linear ──▶ Sigmoid ──▶ M
 
 ## Roadmap 🚀
 
-- More activations (Leaky ReLU, Tanh)
-- General-DAG autograd (topological backward, gradient de-duplication)
-- Batch dimension, more optimizers (momentum, Adam), model save/load
+**Done:**
+- ✅ N-dimensional tensor support with stride-based indexing
+- ✅ Batched processing (PyTorch-style batch-first convention)
+- ✅ Conv2D layer with full autodiff
+- ✅ MaxPool2D with gradient routing
+- ✅ Broadcasting with automatic gradient un-broadcasting
+- ✅ Reshape, transpose, and flatten operations with autodiff tracking
+
+**Next phase: System Design & Performance Optimization**
+
+- Shifting from feature breadth to systems depth
+- Understand the performance characteristics of deep learning frameworks through profiling, measurement, and systematic optimization
+- Maintain correctness via comprehensive testing
 
 ---
 
