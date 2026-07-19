@@ -68,7 +68,7 @@ BM_CNN_FullBackwardPass         57.8 ms         57.7 ms           11
 
 The times can be seen visually below.
 
-<img src="static/v1.0.0-time-per-layer.png" width="50%">
+<img src="static/v1.0.0-time-per-layer.png">
 
 ## Interpretation
 
