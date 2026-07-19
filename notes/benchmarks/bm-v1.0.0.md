@@ -4,7 +4,7 @@
 
 ## Observation
 
-Training the MNIST CNN is exceptionally slow. A single epoch takes significantly longer than expected, even compared to the MLP baseline.
+During implementation of version v1.0.0 we intentionally decided to go for the nested loop variant of the Conv2D forward / backward pass. Even though the training of `examples/mnist_conv` shows acceptable performance, this motivates to measure the execution times per layer, as shown in the small benchmark analysis below.
 
 ## Hypothesis
 
