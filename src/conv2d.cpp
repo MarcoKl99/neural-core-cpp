@@ -4,7 +4,8 @@
 
 namespace nrt {
 
-Conv2D::Conv2D(size_t in_channels, size_t out_channels, size_t kernel_size, WeightInit init)
+Conv2D::Conv2D(size_t in_channels, size_t out_channels, size_t kernel_size, WeightInit init,
+               std::optional<unsigned int> seed)
     : in_channels_(in_channels), out_channels_(out_channels), kernel_size_(kernel_size) {
     // Create weight tensor {out_channels, in_channels, kernel_size, kernel_size}
     weights_ = std::make_shared<Tensor>(
@@ -25,7 +26,7 @@ Conv2D::Conv2D(size_t in_channels, size_t out_channels, size_t kernel_size, Weig
     }
 
     // Initialize weights with random values scaled appropriately
-    std::mt19937 rng(std::random_device{}());
+    std::mt19937 rng(seed.has_value() ? seed.value() : std::random_device{}());
     std::normal_distribution<double> dist(0.0, 1.0);
 
     for (size_t oc = 0; oc < out_channels; ++oc) {

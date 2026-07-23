@@ -397,14 +397,16 @@ TEST_CASE("Integration - Full CNN pipeline (Conv2D + MaxPool2D + Flatten + Linea
           "[integration][cnn][full_pipeline]") {
     const size_t batch = 6;
     const size_t num_classes = batch;  // one unique class per sample -> right-sized capacity
+    const unsigned int seed = 111;
 
     // Build a small CNN: Conv2D -> ReLU -> MaxPool2D -> Flatten -> Linear
     std::vector<std::unique_ptr<nrt::Module>> modules;
-    modules.push_back(std::make_unique<nrt::Conv2D>(1, 4, 3));  // 1 -> 4 channels, 3×3 kernel
+    modules.push_back(std::make_unique<nrt::Conv2D>(1, 4, 3, nrt::WeightInit::He, seed));
     modules.push_back(std::make_unique<nrt::ReLU>());
     modules.push_back(std::make_unique<nrt::MaxPool2D>());  // 2×2 pooling, stride 2
     modules.push_back(std::make_unique<nrt::Flatten>());
-    modules.push_back(std::make_unique<nrt::Linear>(4 * 3 * 3, num_classes));  // 36 → 6 classes
+    modules.push_back(
+        std::make_unique<nrt::Linear>(4 * 3 * 3, num_classes, nrt::WeightInit::Xavier, seed));
     nrt::Sequential model(std::move(modules));
 
     // Create input batch: {6, 1, 8, 8} (6 samples, 1 channel, 8×8 images)

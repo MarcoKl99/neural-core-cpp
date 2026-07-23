@@ -1,4 +1,6 @@
-#include "nrt/linear.hpp"  // TODO: Refactor the weight inits to live in their own file
+#include <optional>
+
+#include "nrt/linear.hpp"
 #include "nrt/module.hpp"
 
 namespace nrt {
@@ -6,7 +8,7 @@ namespace nrt {
 class Conv2D : public Module {
 public:
     Conv2D(size_t in_channels, size_t out_channels, size_t kernel_size,
-           WeightInit init = WeightInit::He);
+           WeightInit init = WeightInit::He, std::optional<unsigned int> seed = std::nullopt);
 
     // Forward pass: {batch, in_channels, height, width} -> {batch, out_channels, out_height,
     // out_width}
