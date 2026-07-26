@@ -1,4 +1,5 @@
 # Custom
+.DS_Store
 dev.cpp
 PROGRESS.md
 .vscode
@@ -8,6 +9,7 @@ data
 playground.py
 *.raw
 benchmarks/results
+profiling/traces
 
 # Prerequisites
 *.d
