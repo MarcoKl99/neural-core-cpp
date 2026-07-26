@@ -68,8 +68,10 @@ int main(int argc, char** argv) {
 
     if (std::string(argv[1]) == "forward") {
         profile_forward();
-    } else {
+    } else if (std::string(argv[1]) == "backward") {
         profile_backward();
+    } else {
+        throw std::invalid_argument("Argument must be forward or backward");
     }
 
     return 0;
