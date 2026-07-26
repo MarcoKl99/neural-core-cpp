@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""Plot Google Benchmark JSON results (from benchmarks/bench_cnn.cpp) as a grouped bar chart.
-
-Usage:
-    python3 benchmarks/visualize_metrics.py benchmarks/results/v1.1.0.json
-"""
-
 import argparse
 import json
 import re
