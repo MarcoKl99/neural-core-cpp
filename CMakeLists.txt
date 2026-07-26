@@ -79,6 +79,12 @@ add_executable(nrt_bench_cnn
 )
 target_link_libraries(nrt_bench_cnn PRIVATE nrt::core benchmark::benchmark)
 
+# Profiling
+add_executable(conv2d_profile
+    profiling/conv2d_profile.cpp
+)
+target_link_libraries(conv2d_profile PRIVATE nrt::core)
+
 # Examples
 add_executable(xor_forward
     examples/xor_forward.cpp
