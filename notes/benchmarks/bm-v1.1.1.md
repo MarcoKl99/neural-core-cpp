@@ -33,12 +33,12 @@ for (size_t i = 0; i < result.size(); ++i) {
 
 | Component | Forward | Backward |
 |---|---|---|
-| **Full CNN pipeline** | **26.72 ms** | **40.83 ms** |
-| Linear1 | 12.36 ms | 22.40 ms |
-| Conv2D | 11.50 ms | 15.43 ms |
-| MaxPool2D | 2.64 ms | 3.22 ms |
-| Linear2 | 41 µs | 97 µs |
-| Flatten | 27 µs | 80 µs |
+| **Full CNN pipeline** | **26.34 ms** | **40.63 ms** |
+| Linear1 | 12.80 ms | 23.04 ms |
+| Conv2D | 11.68 ms | 20.14 ms |
+| MaxPool2D | 2.64 ms | 3.14 ms |
+| Linear2 | 43 µs | 96 µs |
+| Flatten | 27 µs | 84 µs |
 
 The visualization can be seen below.
 
@@ -48,4 +48,4 @@ Voilà! We finally see the expected result, the anomaly of the Conv2D layer's fo
 
 ## Learning from the Experiment
 
-This experiment nicely shows, that questioning the results, even if we proudly admire the working software, is crucial! The result of the combination of benchmarking and profiling nicely revealed a small detail, fixed by only adapting one line of code in 4 different methods, which subsequently led to a performance improvement of ~36.8% (for the Conv2D forward pass)! 🚀
+This experiment nicely shows, that questioning the results, even if we proudly admire the working software, is crucial! The result of the combination of benchmarking and profiling nicely revealed a small detail, fixed by only adapting one line of code in 4 different methods, which subsequently led to a performance improvement of ~35.8% (for the Conv2D forward pass)! 🚀
