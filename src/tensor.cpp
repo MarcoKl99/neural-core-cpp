@@ -89,9 +89,10 @@ Tensor& Tensor::operator+=(const Tensor& other) {
     std::vector<size_t> other_strides = broadcast_strides(other.shape_, other.strides_, shape_);
 
     // Add in-place
+    // Allocate the coords vector once outside of the loop, re-use in the loop
+    std::vector<size_t> coords(shape_.size());
     for (size_t i = 0; i < size(); ++i) {
         // Convert flat index to coords
-        std::vector<size_t> coords(shape_.size());
         size_t idx = i;
         for (int d = shape_.size() - 1; d >= 0; --d) {
             coords[d] = idx % shape_[d];
@@ -121,9 +122,10 @@ Tensor Tensor::operator+(const Tensor& other) const {
         broadcast_strides(other.shape_, other.strides_, result_shape);
 
     // Fill result by looping through all flat indices
+    // Allocate the coords vector once outside of the loop, re-use in the loop
+    std::vector<size_t> coords(result_shape.size());
     for (size_t i = 0; i < result.size(); ++i) {
         // Convert flat index to multi-dimensional coordinates
-        std::vector<size_t> coords(result_shape.size());
         size_t idx = i;
         for (int d = result_shape.size() - 1; d >= 0; --d) {
             coords[d] = idx % result_shape[d];
@@ -157,9 +159,10 @@ Tensor& Tensor::operator-=(const Tensor& other) {
     std::vector<size_t> other_strides = broadcast_strides(other.shape_, other.strides_, shape_);
 
     // Subtract in-place
+    // Allocate the coords vector once outside of the loop, re-use in the loop
+    std::vector<size_t> coords(shape_.size());
     for (size_t i = 0; i < size(); ++i) {
         // Convert flat index to coords
-        std::vector<size_t> coords(shape_.size());
         size_t idx = i;
         for (int d = shape_.size() - 1; d >= 0; --d) {
             coords[d] = idx % shape_[d];
@@ -189,9 +192,10 @@ Tensor Tensor::operator-(const Tensor& other) const {
         broadcast_strides(other.shape_, other.strides_, result_shape);
 
     // Fill result by looping through all flat indices
+    // Allocate the coords vector once outside of the loop, re-use in the loop
+    std::vector<size_t> coords(shape_.size());
     for (size_t i = 0; i < result.size(); ++i) {
         // Convert flat index to multi-dimensional coordinates
-        std::vector<size_t> coords(result_shape.size());
         size_t idx = i;
         for (int d = result_shape.size() - 1; d >= 0; --d) {
             coords[d] = idx % result_shape[d];

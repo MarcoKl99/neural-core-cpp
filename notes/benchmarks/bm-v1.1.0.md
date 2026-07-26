@@ -88,3 +88,5 @@ When the Tensor `result` is large enough, this leads to many heap allocations of
 ## Next Steps
 
 Based on the results obtained above, the unexpected behaviour of the Conv2D layer (cheaper backward- than forward-pass) must be further investigated. Considering the hypothesis, the logic of allocating the `coords` vector should be re-thought and potentially adapted.
+
+***Check the results of the refactoring in bm-v1.1.1.md!***
