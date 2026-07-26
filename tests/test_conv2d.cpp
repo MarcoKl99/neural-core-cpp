@@ -288,11 +288,13 @@ TEST_CASE("Integration - Conv2D + ReLU + Flatten + Linear",
 }
 
 TEST_CASE("Integration - Conv2D gradient flow through ReLU", "[integration][conv2d][backward]") {
+    unsigned int seed = 123;
+
     std::vector<std::unique_ptr<nrt::Module>> modules;
-    modules.push_back(std::make_unique<nrt::Conv2D>(1, 4, 3));
+    modules.push_back(std::make_unique<nrt::Conv2D>(1, 4, 3, nrt::WeightInit::He, seed));
     modules.push_back(std::make_unique<nrt::ReLU>());
     modules.push_back(std::make_unique<nrt::Flatten>());
-    modules.push_back(std::make_unique<nrt::Linear>(4 * 3 * 3, 2));
+    modules.push_back(std::make_unique<nrt::Linear>(4 * 3 * 3, 2, nrt::WeightInit::Xavier, seed));
     nrt::Sequential model(std::move(modules));
 
     // Input
