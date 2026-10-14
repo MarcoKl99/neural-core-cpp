@@ -10,6 +10,7 @@ playground.py
 *.raw
 benchmarks/results
 profiling/traces
+portfolio-documentation.md
 
 # Prerequisites
 *.d
