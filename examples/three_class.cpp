@@ -1,7 +1,10 @@
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "cli_args.hpp"
+#include "csv_logger.hpp"
 #include "nrt/activations.hpp"
 #include "nrt/linear.hpp"
 #include "nrt/loss.hpp"
@@ -60,7 +63,13 @@ double evaluate_average_loss(nrt::Sequential& model, nrt::CrossEntropyLoss& loss
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // Optional CLI args: [csv_path] and --log-interval <n>.
+    // Defaults to 10 so the 200-epoch run gives ~20 points.
+    nrt_examples::ParsedArgs args = nrt_examples::parse_args(argc, argv, /*default_log_interval=*/10);
+    const std::string csv_path = args.positional.empty() ? "three_class.csv" : args.positional[0];
+    const int log_interval = args.log_interval;
+
     // Three well-separated clusters in 2D, 4 points each
     // Create batch tensor: {12, 2}
     auto inputs = std::make_shared<nrt::Tensor>(std::vector<size_t>{12, 2});
@@ -118,6 +127,10 @@ int main() {
               << '\n';
     std::cout << "Initial accuracy: " << evaluate_accuracy(model, inputs, targets) << '\n';
 
+    // Log the training curve: epoch vs. cross-entropy loss and accuracy.
+    nrt_examples::CsvLogger csv(csv_path, "epoch,loss,accuracy");
+    std::cout << "Writing training curve to: " << csv_path << '\n';
+
     for (int epoch = 0; epoch < epochs; ++epoch) {
         optimizer.zero_grad();
 
@@ -128,10 +141,20 @@ int main() {
 
         optimizer.step();
 
+        // Log to the CSV every `log_interval` epochs (plus the final epoch) - independent of
+        // the console print below.
+        if ((epoch % log_interval == 0) || (epoch == epochs - 1)) {
+            csv.row({static_cast<double>(epoch),
+                     evaluate_average_loss(model, loss_fn, inputs, targets),
+                     evaluate_accuracy(model, inputs, targets)});
+        }
+
+        // Console progress: every 10 epochs.
         if ((epoch % 10) == 0) {
-            std::cout << "Epoch " << epoch << "/" << epochs
-                      << " - loss: " << evaluate_average_loss(model, loss_fn, inputs, targets)
-                      << " - accuracy: " << evaluate_accuracy(model, inputs, targets) << '\n';
+            double epoch_loss = evaluate_average_loss(model, loss_fn, inputs, targets);
+            double epoch_accuracy = evaluate_accuracy(model, inputs, targets);
+            std::cout << "Epoch " << epoch << "/" << epochs << " - loss: " << epoch_loss
+                      << " - accuracy: " << epoch_accuracy << '\n';
         }
     }
 

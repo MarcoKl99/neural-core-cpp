@@ -11,6 +11,7 @@ playground.py
 benchmarks/results
 profiling/traces
 portfolio-documentation.md
+*.csv
 
 # Prerequisites
 *.d

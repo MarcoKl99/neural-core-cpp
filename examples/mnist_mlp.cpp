@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "cli_args.hpp"
+#include "csv_logger.hpp"
 #include "mnist_loader.hpp"
 #include "nrt/activations.hpp"
 #include "nrt/linear.hpp"
@@ -34,9 +36,9 @@ constexpr unsigned int kSeed = 42;
 constexpr size_t kDefaultTrainSubsetSize = 5000;
 constexpr size_t kDefaultTestSubsetSize = 1000;
 
-size_t parse_size_arg(int argc, char** argv, int index, size_t default_value) {
-    if (argc <= index) return default_value;
-    return static_cast<size_t>(std::stoul(argv[index]));
+size_t parse_size_arg(const std::vector<std::string>& args, size_t index, size_t default_value) {
+    if (index >= args.size()) return default_value;
+    return static_cast<size_t>(std::stoul(args[index]));
 }
 
 // Truncate a loaded dataset down to its first `size` samples (subset for fast iteration).
@@ -173,14 +175,21 @@ int main(int argc, char** argv) {
     size_t train_subset_size;
     size_t test_subset_size;
     int epochs;
+    nrt_examples::ParsedArgs args;
     try {
-        train_subset_size = parse_size_arg(argc, argv, 1, kDefaultTrainSubsetSize);
-        test_subset_size = parse_size_arg(argc, argv, 2, kDefaultTestSubsetSize);
-        epochs = parse_size_arg(argc, argv, 3, kDefaultEpochs);
+        args = nrt_examples::parse_args(argc, argv, /*default_log_interval=*/1);
+        train_subset_size = parse_size_arg(args.positional, 0, kDefaultTrainSubsetSize);
+        test_subset_size = parse_size_arg(args.positional, 1, kDefaultTestSubsetSize);
+        epochs = static_cast<int>(parse_size_arg(args.positional, 2, kDefaultEpochs));
     } catch (const std::exception&) {
-        std::cerr << "Usage: " << argv[0] << " [train_subset_size] [test_subset_size][epochs]\n ";
+        std::cerr << "Usage: " << argv[0]
+                  << " [train_subset_size] [test_subset_size] [epochs] [csv_path] [--log-interval N]\n";
         return 1;
     }
+
+    // Optional CLI argument: path of the CSV file to write the training curve to.
+    const std::string csv_path = args.positional.size() > 3 ? args.positional[3] : "mnist_mlp.csv";
+    const int log_interval = args.log_interval;
 
     std::cout << "Loading MNIST...\n";
     auto train_data = take_subset(mnist::load("data/MNIST/raw/train-images-idx3-ubyte",
@@ -217,6 +226,11 @@ int main(int argc, char** argv) {
     std::cout << "\nInitial train loss: " << init_train_loss << '\n';
     std::cout << "Initial test accuracy: " << init_test_accuracy << "\n\n";
 
+    // Log the training curve: epoch vs. train loss and test accuracy (epoch 0 = before training).
+    nrt_examples::CsvLogger csv(csv_path, "epoch,train_loss,test_accuracy");
+    csv.row({0.0, init_train_loss, init_test_accuracy});
+    std::cout << "Writing training curve to: " << csv_path << "\n\n";
+
     std::vector<size_t> indices(train_data.images.size());
     std::iota(indices.begin(), indices.end(), 0);
     std::mt19937 rng(kSeed);
@@ -251,6 +265,9 @@ int main(int argc, char** argv) {
 
         double train_loss = evaluate_average_loss(model, loss_fn, train_data);
         double test_accuracy = evaluate_accuracy(model, test_data);
+        if ((epoch % log_interval == 0) || (epoch == epochs - 1)) {
+            csv.row({static_cast<double>(epoch + 1), train_loss, test_accuracy});
+        }
         std::cout << "Epoch " << (epoch + 1) << "/" << epochs << " - train loss: " << train_loss
                   << " - test accuracy: " << test_accuracy << "\n\n";
     }
