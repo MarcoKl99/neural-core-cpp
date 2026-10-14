@@ -1,6 +1,9 @@
 #include <iostream>
+#include <string>
 #include <vector>
 
+#include "cli_args.hpp"
+#include "csv_logger.hpp"
 #include "nrt/activations.hpp"
 #include "nrt/linear.hpp"
 #include "nrt/loss.hpp"
@@ -99,7 +102,13 @@ double evaluate_average_loss(nrt::Sequential& model, const std::shared_ptr<nrt::
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // Optional CLI args: [csv_path] and --log-interval <n>.
+    // Defaults to 250 so a 5000-epoch run gives ~20 points.
+    nrt_examples::ParsedArgs args = nrt_examples::parse_args(argc, argv, /*default_log_interval=*/250);
+    const std::string csv_path = args.positional.empty() ? "xor_training.csv" : args.positional[0];
+    const int log_interval = args.log_interval;
+
     // Create the neural network using Sequential: 2 -> 4 (ReLU) -> 1 (Sigmoid)
     std::vector<std::unique_ptr<nrt::Module>> modules;
     modules.push_back(std::make_unique<nrt::Linear>(2, 4));
@@ -141,6 +150,10 @@ int main() {
     double loss_before = evaluate_average_loss(model, inputs, targets);
     std::cout << "Average loss BEFORE update: " << loss_before << '\n';
 
+    // Log the training curve: epoch (0-based, matching the console output) vs. MSE loss.
+    nrt_examples::CsvLogger csv(csv_path, "epoch,loss");
+    std::cout << "Writing training curve to: " << csv_path << '\n';
+
     for (int epoch = 0; epoch < epochs; ++epoch) {
         optimizer.zero_grad();
 
@@ -151,6 +164,13 @@ int main() {
 
         optimizer.step();
 
+        // Log to the CSV every `log_interval` epochs (plus the final epoch) - independent of
+        // the console print below.
+        if ((epoch % log_interval == 0) || (epoch == epochs - 1)) {
+            csv.row({static_cast<double>(epoch), evaluate_average_loss(model, inputs, targets)});
+        }
+
+        // Console progress: every 1000 epochs.
         if ((epoch % 1000) == 0) {
             const double avg_loss = evaluate_average_loss(model, inputs, targets);
             std::cout << "Loss (" << epoch << "/" << epochs << "):  " << avg_loss << '\n';
